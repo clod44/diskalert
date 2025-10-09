@@ -2,10 +2,22 @@ package main
 
 import (
 	"log"
+	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/disk"
 )
+
+type DiskStatus struct {
+	mu          sync.RWMutex
+	DiskPath    string  `json:"disk_path"`
+	Threshold   int     `json:"threshold"`
+	TotalGB     float64 `json:"total_gb"`
+	FreeGB      float64 `json:"free_gb"`
+	UsedPercent float64 `json:"used_percent"`
+	IsAlert     bool    `json:"is_alert"`
+	LastCheck   string  `json:"last_check"`
+}
 
 func checkDiskUsage(cfg Config) {
 	usage, err := disk.Usage(cfg.DiskPath)

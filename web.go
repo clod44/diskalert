@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
+	"path/filepath"
 )
 
 func metricsHandler(w http.ResponseWriter, r *http.Request) {
@@ -20,11 +22,17 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func startWebServer(cfg Config) {
+	var certFilePath = filepath.Join(cfg.CertDir, cfg.CertFileName)
+	var keyFilePath = filepath.Join(cfg.CertDir, cfg.KeyFileName)
+
 	http.HandleFunc("/api/metrics", metricsHandler)
 
-	fileServer := http.FileServer(http.FS(Assets))
-	// to always use the contents of "public" at / rather than public folder itself
-	http.Handle("/", http.StripPrefix("/", fileServer))
+	publicFS, err := fs.Sub(Assets, "public")
+	if err != nil {
+		log.Fatalf("Failed to create sub-filesystem for 'public' (check if public folder is correctly embedded): %v", err)
+	}
+	fileServer := http.FileServer(http.FS(publicFS))
+	http.Handle("/", fileServer)
 
 	bindAddress := fmt.Sprintf(":%d", cfg.Port)
 
@@ -34,7 +42,8 @@ func startWebServer(cfg Config) {
 	log.Printf("JSON Metrics API:    http://<YOUR_IP>:%d/api/metrics", cfg.Port)
 	log.Println("========================================================================================")
 
-	if err := http.ListenAndServe(bindAddress, nil); err != nil {
-		log.Fatalf("Web server failed to start on port %d: %v", cfg.Port, err)
+	err2 := http.ListenAndServeTLS(bindAddress, certFilePath, keyFilePath, nil)
+	if err != nil {
+		log.Fatalf("HTTPS Web server failed to start on port %d: %v", cfg.Port, err2)
 	}
 }

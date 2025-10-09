@@ -8,6 +8,7 @@ import (
 )
 
 func setupLogger(cfg Config) *os.File {
+	var logFileName string = "diskalert.log"
 	log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
 
 	if !cfg.LogToFile {

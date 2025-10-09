@@ -2,39 +2,14 @@ package main
 
 import (
 	"log"
-	"sync"
 	"time"
 )
-
-const configFileName = "diskalert.config.json"
-const logFileName = "diskalert.log"
-
-type Config struct {
-	LogToFile            bool   `json:"log_to_file"`
-	LogFilePath          string `json:"log_file_path"`
-	DiskPath             string `json:"disk_path"`
-	Threshold            int    `json:"threshold"`
-	CheckIntervalSeconds int    `json:"check_interval_seconds"`
-	Port                 int    `json:"port"`
-}
-
-// DiskStatus holds the metrics and uses a Mutex for thread-safe access.
-type DiskStatus struct {
-	mu          sync.RWMutex
-	DiskPath    string  `json:"disk_path"`
-	Threshold   int     `json:"threshold"`
-	TotalGB     float64 `json:"total_gb"`
-	FreeGB      float64 `json:"free_gb"`
-	UsedPercent float64 `json:"used_percent"`
-	IsAlert     bool    `json:"is_alert"`
-	LastCheck   string  `json:"last_check"`
-}
 
 // Global variable to hold the latest metrics, accessible by monitor.go and web.go
 var CurrentStatus = &DiskStatus{}
 
 func main() {
-	config := loadConfig()
+	var config = loadConfig()
 
 	logFileHandle := setupLogger(config)
 	if logFileHandle != nil {
@@ -44,6 +19,7 @@ func main() {
 	CurrentStatus.DiskPath = config.DiskPath
 	CurrentStatus.Threshold = config.Threshold
 
+	setupTLSFiles(config)     // this gotta be a blocking process so web server doesnt start before this
 	go startWebServer(config) //"go" makes it a background process type shi without blocking the flow
 
 	interval := time.Duration(config.CheckIntervalSeconds) * time.Second
