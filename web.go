@@ -30,8 +30,8 @@ func startWebServer(cfg Config) {
 
 	log.Println("========================================================================================")
 	log.Printf("DiskAlert Web Dashboard is now LIVE!")
-	log.Printf("Access Dashboard at: http://<PACS_IP>:%d/", cfg.Port)
-	log.Printf("JSON Metrics API:    http://<PACS_IP>:%d/api/metrics", cfg.Port)
+	log.Printf("Access Dashboard at: http://<YOUR_IP>:%d/", cfg.Port)
+	log.Printf("JSON Metrics API:    http://<YOUR_IP>:%d/api/metrics", cfg.Port)
 	log.Println("========================================================================================")
 
 	if err := http.ListenAndServe(bindAddress, nil); err != nil {
