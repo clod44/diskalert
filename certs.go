@@ -48,7 +48,7 @@ func validateExistingCert(certPath string, expectedIP string) bool {
 	return false
 }
 
-func setupTLSFiles(cfg Config) {
+func setupTLSFiles() {
 	certFilePath := filepath.Join(cfg.CertDir, cfg.CertFileName)
 	keyFilePath := filepath.Join(cfg.CertDir, cfg.KeyFileName)
 

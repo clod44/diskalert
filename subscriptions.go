@@ -1,0 +1,198 @@
+package main
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+
+	webpush "github.com/SherClockHolmes/webpush-go"
+	_ "modernc.org/sqlite"
+)
+
+type Keys struct {
+	P256DH string `json:"p256dh"`
+	Auth   string `json:"auth"`
+}
+
+type PushSubscription struct {
+	Endpoint string `json:"endpoint"`
+	Keys     Keys   `json:"keys"`
+}
+type NotificationPayload struct {
+    Title   string        `json:"title"`  
+	Message string        `json:"message"` 
+}
+
+type Subscription struct {
+	Endpoint string
+	P256DH   string
+	Auth     string
+}
+
+var DB *sql.DB
+
+func InitSubscriptionDB() {
+	dbFileName := "subscriptions.db"
+	dbFilePath := filepath.Join(getAppDir(), dbFileName)
+	
+	db, err := sql.Open("sqlite", dbFilePath)
+	if err != nil {
+		log.Fatalf("FATAL: Failed to open SQLite database: %v", err)
+	}
+	
+	DB = db
+
+	query := `
+	CREATE TABLE IF NOT EXISTS subscriptions (
+		endpoint TEXT PRIMARY KEY,
+		p256dh TEXT,
+		auth TEXT
+	);`
+
+	if _, err := DB.Exec(query); err != nil {
+		DB.Close()
+		log.Fatalf("FATAL: Failed to create subscriptions table: %v", err)
+	}
+	
+	log.Printf("SQLite database initialized at %s.", dbFilePath)
+
+	var count int
+	row := DB.QueryRow("SELECT COUNT(*) FROM subscriptions")
+	if err := row.Scan(&count); err == nil {
+		log.Printf("Loaded %d existing push subscriptions from database.", count)
+	}
+}
+
+func AddSubscription(sub PushSubscription) error {
+	query := `
+	INSERT OR REPLACE INTO subscriptions (endpoint, p256dh, auth) 
+	VALUES (?, ?, ?)`
+	
+	_, err := DB.Exec(query, sub.Endpoint, sub.Keys.P256DH, sub.Keys.Auth)
+	if err != nil {
+		return err
+	}
+	
+	log.Printf("Subscription added/reconciled for endpoint: %s", sub.Endpoint)
+	return nil
+}
+
+func RemoveSubscription(endpoint string) error {
+	query := `DELETE FROM subscriptions WHERE endpoint = ?`
+	
+	result, err := DB.Exec(query, endpoint)
+	if err != nil {
+		return err
+	}
+	
+	rowsAffected, _ := result.RowsAffected()
+	log.Printf("Subscription removed for endpoint %s. Rows affected: %d", endpoint, rowsAffected)
+	return nil
+}
+
+func GetAllSubscriptions() ([]PushSubscription, error) {
+	query := `SELECT endpoint, p256dh, auth FROM subscriptions`
+	
+	rows, err := DB.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var subscriptions []PushSubscription
+	for rows.Next() {
+		var sub PushSubscription
+		var p256dh, auth string
+		
+		if err := rows.Scan(&sub.Endpoint, &p256dh, &auth); err != nil {
+			return nil, err
+		}
+		
+		sub.Keys = Keys{
+			P256DH: p256dh,
+			Auth:   auth,
+		}
+		subscriptions = append(subscriptions, sub)
+	}
+	
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return subscriptions, nil
+}
+func SendAlertsToAllSubscribers(title string, message string) error {
+	subs, err := GetAllSubscriptions()
+	if err != nil {
+		return fmt.Errorf("could not retrieve subscriptions: %w", err)
+	}
+
+	if len(subs) == 0 {
+		log.Println("No active subscriptions found. Skipping push notification.")
+		return nil
+	}
+
+	publicKeyPath := filepath.Join(getAppDir(), cfg.VapidDir, cfg.VapidPublicKey) 
+	privateKeyPath := filepath.Join(getAppDir(), cfg.VapidDir, cfg.VapidSecretKey)
+    
+	rawPublicKey, err := os.ReadFile(publicKeyPath)
+	if err != nil {
+		return fmt.Errorf("failed to read VAPID public key file %s: %w", publicKeyPath, err)
+	}
+	publicKey := string(rawPublicKey) 
+	
+	rawPrivateKey, err := os.ReadFile(privateKeyPath)
+	if err != nil {
+		return fmt.Errorf("failed to read VAPID secret key file %s: %w", privateKeyPath, err)
+	}
+	privateKey := string(rawPrivateKey) 
+
+	payload := NotificationPayload{
+		Title: title,
+		Message: message,
+	}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal notification payload: %w", err)
+	}
+	
+	log.Printf("Attempting to send alert to %d subscribers...", len(subs))
+
+	for _, sub := range subs {
+		wpSub := &webpush.Subscription{
+			Endpoint: sub.Endpoint,
+			Keys: webpush.Keys{
+				P256dh: sub.Keys.P256DH, 
+				Auth: sub.Keys.Auth,
+			},
+		}
+
+		resp, err := webpush.SendNotification(payloadBytes, wpSub, &webpush.Options{
+			Subscriber:      "mailto:admin@your-disk-monitor.com", 
+			VAPIDPublicKey:  publicKey,
+			VAPIDPrivateKey: privateKey,
+			TTL:             60 * 60 * 24,
+		})
+
+		if err != nil {
+			if resp != nil && (resp.StatusCode == 404 || resp.StatusCode == 410) {
+				log.Printf("Subscription expired/invalid for %s. Deleting from DB...", sub.Endpoint)
+				if removeErr := RemoveSubscription(sub.Endpoint); removeErr != nil {
+					log.Printf("Error cleaning up expired subscription %s: %v", sub.Endpoint, removeErr)
+				}
+			} else {
+				log.Printf("Push notification failed for %s: %v", sub.Endpoint, err)
+			}
+		} else {
+			log.Printf("Successfully sent push notification to %s", sub.Endpoint)
+		}
+		
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}
+	return nil
+}

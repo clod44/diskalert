@@ -5,37 +5,43 @@ import (
 	"time"
 )
 
-// Global variable to hold the latest metrics, accessible by monitor.go and web.go
+
 var CurrentStatus = &DiskStatus{}
+var cfg Config 
 
 func main() {
-	var config = loadConfig()
+	cfg = loadConfig()
 
-	logFileHandle := setupLogger(config)
+	logFileHandle := setupLogger()
 	if logFileHandle != nil {
 		defer logFileHandle.Close()
 	}
 
-	CurrentStatus.DiskPath = config.DiskPath
-	CurrentStatus.Threshold = config.Threshold
+	CurrentStatus.DiskPath = cfg.DiskPath
+	CurrentStatus.Threshold = cfg.Threshold
 
-	setupTLSFiles(config)     // this gotta be a blocking process so web server doesnt start before this
-	InitSubscriptionDB(config)
-	setupVAPIDKeys(config)
-	go startWebServer(config) //"go" makes it a background process type shi without blocking the flow
+	setupTLSFiles()     // this gotta be a blocking process so web server doesn't start before this
+	InitSubscriptionDB()
+	setupVAPIDKeys()
+	go startWebServer() //"go" makes it a background process type shi without blocking the flow
 
-	interval := time.Duration(config.CheckIntervalSeconds) * time.Second
-	log.Printf("Monitoring %s every %d seconds. Threshold is %d%%.", config.DiskPath, config.CheckIntervalSeconds, config.Threshold)
+	interval := time.Duration(cfg.CheckIntervalSeconds) * time.Second
+	log.Printf("Monitoring %s every %d seconds. Threshold is %d%%.", cfg.DiskPath, cfg.CheckIntervalSeconds, cfg.Threshold)
 	log.Println("--------------------------------------------------------------------------------")
 
 	for {
 		log.Println("Checking disk stats...")
-
-		checkDiskUsage(config)
+		checkDiskUsage() 
+		
+		if(CurrentStatus.IsAlert){
+			err := SendAlertsToAllSubscribers("crazy", "message") 
+			if err != nil { 
+				log.Printf("Error sending alerts: %v", err)
+			}
+		}
 
 		nextCheckTime := time.Now().Add(interval)
-		log.Printf("Next check will be %d seconds later, at %s.", config.CheckIntervalSeconds, nextCheckTime.Format("15:04:05"))
-
+		log.Printf("Next check will be %d seconds later, at %s.", cfg.CheckIntervalSeconds, nextCheckTime.Format("15:04:05"))
 		time.Sleep(interval)
 	}
 }

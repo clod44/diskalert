@@ -5,9 +5,10 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"encoding/json"
 )
 
-func setupLogger(cfg Config) *os.File {
+func setupLogger() *os.File {
 	var logFileName string = "diskalert.log"
 	log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
 
@@ -39,4 +40,13 @@ func setupLogger(cfg Config) *os.File {
 	log.Println("Utility Started. Logging output redirected to file and console.")
 
 	return logFile
+}
+
+func logJson(data interface{}) {
+	jsonBytes, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		log.Printf("ERROR: Failed to format data for JSON logging: %v", err)
+		return
+	}
+	log.Println(string(jsonBytes))
 }

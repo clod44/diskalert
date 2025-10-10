@@ -10,71 +10,16 @@
 
 <body style="font-family: Arial, sans-serif;">
     <h1>Disk Monitor Status</h1>
+    <button id="subscribe-btn">Subscribe</button>
+    <button id="unsubscribe-btn">Unsubscribe</button>
+    <button id="subscriptions-btn">Subscriptions</button>
 
-    <!-- Display elements -->
-    <p>Last Check: <strong id="last-check">N/A</strong></p>
+    <p id="last-check"></p>
+    <pre id="stats"></pre>
+    <hr>
+    <pre id="subscriptions"></pre>
 
-    <table border="1" style="border-collapse: collapse; width: 400px;">
-        <tr>
-            <td>Disk Path:</td>
-            <td id="disk-path">Loading...</td>
-        </tr>
-        <tr>
-            <td>Threshold:</td>
-            <td id="threshold">Loading...</td>
-        </tr>
-        <tr>
-            <td>Used Percentage:</td>
-            <td id="used-percent">Loading...</td>
-        </tr>
-        <tr>
-            <td>Free Space (GB):</td>
-            <td id="free-gb">Loading...</td>
-        </tr>
-    </table>
-
-    <h2 id="alert-status" style="margin-top: 20px; color: grey;">Status: Waiting for data...</h2>
-
-    <!-- JavaScript to fetch data -->
-    <script>
-        // Function to call the Go backend
-        async function fetchMetrics() {
-            try {
-                // Fetch data from the endpoint created in web.go
-                const response = await fetch('/api/metrics');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-
-                // Update elements
-                document.getElementById('last-check').textContent = data.last_check;
-                document.getElementById('disk-path').textContent = data.disk_path;
-                document.getElementById('threshold').textContent = `${data.threshold}%`;
-                document.getElementById('free-gb').textContent = data.free_gb.toFixed(2);
-                document.getElementById('used-percent').textContent = `${data.used_percent.toFixed(1)}%`;
-
-                const alertStatus = document.getElementById('alert-status');
-                if (data.is_alert) {
-                    alertStatus.textContent = "!!! ALERT: USAGE EXCEEDS THRESHOLD !!!";
-                    alertStatus.style.color = 'red';
-                } else {
-                    alertStatus.textContent = "Status: Nominal";
-                    alertStatus.style.color = 'green';
-                }
-
-            } catch (error) {
-                console.error("Error fetching metrics:", error);
-                document.getElementById('alert-status').textContent = "Status: Error connecting to server.";
-                document.getElementById('alert-status').style.color = 'orange';
-            }
-        }
-
-        // Start fetching immediately and then set up the recurring 5-second interval
-        fetchMetrics();
-        setInterval(fetchMetrics, 5000);
-    </script>
-
+    <script src="index.js"></script>
 </body>
 
 </html>

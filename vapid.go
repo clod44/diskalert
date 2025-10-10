@@ -22,7 +22,7 @@ func encodeVAPIDKey(b []byte) string {
 	return base64.URLEncoding.EncodeToString(b)
 }
 
-func setupVAPIDKeys(cfg Config) {
+func setupVAPIDKeys() {
 	if err := os.MkdirAll(cfg.VapidDir, 0755); err != nil {
 		log.Fatalf("Failed to create VAPID directory %s: %v", cfg.VapidDir, err)
 	}

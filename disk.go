@@ -19,7 +19,7 @@ type DiskStatus struct {
 	LastCheck   string  `json:"last_check"`
 }
 
-func checkDiskUsage(cfg Config) {
+func checkDiskUsage() {
 	usage, err := disk.Usage(cfg.DiskPath)
 	if err != nil {
 		log.Printf("ERROR: Could not get disk usage for path %s: %v", cfg.DiskPath, err)

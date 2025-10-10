@@ -2,10 +2,10 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"reflect"
 )
 
 type Config struct {
@@ -22,7 +22,6 @@ type Config struct {
 	VapidDir			 string `json:"vapid_dir"`
 	VapidSecretKey		 string `json:"vapid_secret_key"`
 	VapidPublicKey		 string `json:"vapid_public_key"`
-	SubscriptionFileName string `json:"subscriptions_file_name"`
 }
 
 func getDefaultConfig() Config {
@@ -40,8 +39,6 @@ func getDefaultConfig() Config {
 		VapidDir:			  "./vapid",
 		VapidSecretKey: 	  "vapid_secret_key",
 		VapidPublicKey:		  "vapid_public_key",
-		SubscriptionFileName:  "subscriptions.json",
-
 	}
 }
 
@@ -53,31 +50,65 @@ func getAppDir() string {
 	return filepath.Dir(executablePath)
 }
 
+
 func loadConfig() Config {
-	var configFileName string = "diskalert.config.json"
-	appDir := getAppDir()
-	configFilePath := filepath.Join(appDir, configFileName)
+	const configFileName = "diskalert.config.json"
+	configFilePath := filepath.Join(getAppDir(), configFileName)
 
-	defaultCfg := getDefaultConfig()
-	config := defaultCfg
-
+	finalConfig := getDefaultConfig()
+	
 	data, err := os.ReadFile(configFilePath)
+
+	if os.IsNotExist(err) {
+		log.Printf("Configuration file not found. Creating default config at %s.", configFilePath)
+		
+		out, _ := json.MarshalIndent(finalConfig, "", "    ")
+		if writeErr := os.WriteFile(configFilePath, out, 0644); writeErr != nil {
+			log.Printf("Warning: Failed to write default config file: %v", writeErr)
+		}
+		
+		log.Println("--- Config (New Default) ---")
+		logJson(finalConfig) 
+		return finalConfig
+	}
 	if err != nil {
-		log.Printf("Configuration file not found or invalid. Created default config at %s.", configFilePath)
-
-		out, _ := json.MarshalIndent(defaultCfg, "", "    ")
-		os.WriteFile(configFilePath, out, 0644)
-
-		return defaultCfg
+		log.Fatalf("Error reading configuration file. you may want to fix the issue or delete the config itself for automatic recreation. %s: %v", configFilePath, err)
 	}
 
-	if err := json.Unmarshal(data, &config); err != nil {
-		log.Fatalf("Error parsing configuration file: %v", err)
+
+	var rawConfigMap map[string]interface{}
+	if err := json.Unmarshal(data, &rawConfigMap); err != nil {
+		log.Fatalf("Error parsing configuration file. you may want to fix the issue or delete the config itself for automatic recreation. %s: %v", configFilePath, err)
+	}
+	
+	if err := json.Unmarshal(data, &finalConfig); err != nil {
+		log.Fatalf("Error merging configuration data: %v", err)
+	}
+	
+	t := reflect.TypeOf(finalConfig)
+	
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		jsonKey := field.Tag.Get("json")
+		if jsonKey == "" {
+			continue
+		}
+		if _, exists := rawConfigMap[jsonKey]; !exists {
+			defaultValue := reflect.ValueOf(finalConfig).Field(i).Interface()
+			log.Printf("WARN: Field '%s' was missing. Adding default value: %v", jsonKey, defaultValue)
+		}
 	}
 
-	log.Printf("Configuration loaded from %s.", configFilePath)
-
-	fmt.Printf("DEBUG: Final Loaded Config: %+v\n", config)
-
-	return config
+	out, _ := json.MarshalIndent(finalConfig, "", "    ")
+	if writeErr := os.WriteFile(configFilePath, out, 0644); writeErr != nil {
+		log.Println("merged config file:")
+		logJson(out)
+		log.Printf("Warning: Failed to write merged config file: %v", writeErr)
+	}
+	
+	log.Printf("Configuration loaded and merged from %s. File structure updated.", configFilePath)
+	log.Println("--- Config (Loaded and Merged) ---")
+	logJson(finalConfig) 
+	
+	return finalConfig
 }
