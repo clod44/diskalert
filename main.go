@@ -20,6 +20,7 @@ func main() {
 	CurrentStatus.Threshold = config.Threshold
 
 	setupTLSFiles(config)     // this gotta be a blocking process so web server doesnt start before this
+	setupVAPIDKeys(config)
 	go startWebServer(config) //"go" makes it a background process type shi without blocking the flow
 
 	interval := time.Duration(config.CheckIntervalSeconds) * time.Second

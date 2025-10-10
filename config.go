@@ -19,6 +19,9 @@ type Config struct {
 	CertFileName         string `json:"cert_file_name"`
 	KeyFileName          string `json:"key_file_name"`
 	IP                   string `json:"ip"`
+	VapidDir			 string `json:"vapid_dir"`
+	VapidSecretKey		 string `json:"vapid_secret_key"`
+	VapidPublicKey		 string `json:"vapid_public_key"`
 }
 
 func getDefaultConfig() Config {
@@ -33,6 +36,10 @@ func getDefaultConfig() Config {
 		CertFileName:         "diskalert.crt",
 		KeyFileName:          "diskalert.key",
 		IP:                   "192.168.66.153",
+		VapidDir:			  "./vapid",
+		VapidSecretKey: 	  "vapid_secret_key",
+		VapidPublicKey:		  "vapid_public_key",
+
 	}
 }
 
