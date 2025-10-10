@@ -22,6 +22,7 @@ type Config struct {
 	VapidDir			 string `json:"vapid_dir"`
 	VapidSecretKey		 string `json:"vapid_secret_key"`
 	VapidPublicKey		 string `json:"vapid_public_key"`
+	SubscriptionFileName string `json:"subscriptions_file_name"`
 }
 
 func getDefaultConfig() Config {
@@ -39,6 +40,7 @@ func getDefaultConfig() Config {
 		VapidDir:			  "./vapid",
 		VapidSecretKey: 	  "vapid_secret_key",
 		VapidPublicKey:		  "vapid_public_key",
+		SubscriptionFileName:  "subscriptions.json",
 
 	}
 }
