@@ -14,6 +14,40 @@ import (
 	"time"
 )
 
+func validateExistingCert(certPath string, expectedIP string) bool {
+	data, err := os.ReadFile(certPath)
+	if err != nil {
+		log.Printf("Error reading certificate file %s for validation: %v", certPath, err)
+		return false
+	}
+	block, _ := pem.Decode(data)
+	if block == nil || block.Type != "CERTIFICATE" {
+		log.Printf("Error decoding PEM block from certificate file %s.", certPath)
+		return false
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		log.Printf("Error parsing certificate from file %s: %v", certPath, err)
+		return false
+	}
+	if time.Now().After(cert.NotAfter) {
+		log.Printf("CRITICAL: Certificate in %s expired on %s. Regeneration required.", certPath, cert.NotAfter.Format(time.RFC822))
+		return false
+	}
+	targetIP := net.ParseIP(expectedIP)
+	if targetIP == nil {
+		log.Printf("CRITICAL: Configured IP address '%s' in the config file is not a valid IP address for certificate validation.", expectedIP)
+		return false
+	}
+	for _, ip := range cert.IPAddresses {
+		if ip.Equal(targetIP) {
+			return true
+		}
+	}
+	log.Printf("Validation failed: Certificate does not contain required IP %s in its SAN list.", expectedIP)
+	return false
+}
+
 func setupTLSFiles(cfg Config) {
 	certFilePath := filepath.Join(cfg.CertDir, cfg.CertFileName)
 	keyFilePath := filepath.Join(cfg.CertDir, cfg.KeyFileName)
@@ -25,6 +59,15 @@ func setupTLSFiles(cfg Config) {
 	if _, err := os.Stat(certFilePath); err == nil {
 		if _, err := os.Stat(keyFilePath); err == nil {
 			log.Printf("Found existing TLS files in %s. Using them.", cfg.CertDir)
+			isIPValid := validateExistingCert(certFilePath, cfg.IP)
+			if !isIPValid {
+				log.Printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+				log.Printf("!! CRITICAL SECURITY ERROR: CERTIFICATE STALE !!")
+				log.Printf("!! The IP address configured (%s) is NOT present in the existing certificate's SAN list.", cfg.IP)
+				log.Printf("!! Due to a mismatch between the configured IP and the certificate, the connection will fail.")
+				log.Printf("!! ACTION REQUIRED: Stop the app, manually delete %s and %s from %s, and restart.", cfg.CertFileName, cfg.KeyFileName, cfg.CertDir)
+				log.Printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+			}
 			return
 		}
 	}
