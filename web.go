@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 )
 
@@ -89,6 +90,19 @@ func subscriptionsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func handleCertDownload(w http.ResponseWriter, r *http.Request) {
+    certFilePath := filepath.Join(getAppDir(), cfg.CertDir, cfg.CertFileName)
+	if _, err := os.Stat(certFilePath); os.IsNotExist(err) {
+		log.Printf("Certificate file not found at: %s", certFilePath)
+		http.Error(w, "Certificate file not found.", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", cfg.CertFileName))
+	w.Header().Set("Content-Type", "application/x-pem-file")
+	http.ServeFile(w, r, certFilePath)
+    log.Printf("Served certificate file: %s to client %s", cfg.CertFileName, r.RemoteAddr)
+}
+
 func startWebServer() {
 	var certFilePath = filepath.Join(cfg.CertDir, cfg.CertFileName)
 	var keyFilePath = filepath.Join(cfg.CertDir, cfg.KeyFileName)
@@ -98,6 +112,7 @@ func startWebServer() {
 	http.HandleFunc("/api/subscribe", subscribeHandler)
 	http.HandleFunc("/api/unsubscribe", unsubscribeHandler) 
 	http.HandleFunc("/api/subscriptions", subscriptionsHandler)
+	http.HandleFunc("/download/cert", handleCertDownload)
 
 	publicFS, err := fs.Sub(Assets, "public")
 	if err != nil {
