@@ -24,7 +24,8 @@ func main() {
 	InitSubscriptionDB()
 	setupVAPIDKeys()
 	go startWebServer() //"go" makes it a background process type shi without blocking the flow
-
+	ManageServiceFile()
+	
 	interval := time.Duration(cfg.CheckIntervalSeconds) * time.Second
 	log.Printf("Monitoring %s every %d seconds. Threshold is %d%%.", cfg.DiskPath, cfg.CheckIntervalSeconds, cfg.Threshold)
 	log.Println("--------------------------------------------------------------------------------")
