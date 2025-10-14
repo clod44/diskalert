@@ -71,13 +71,13 @@ func ManageServiceFile() error {
 	log.Println("You can stop this instance of the diskalert and run it as a service.")
 	log.Println("NEXT STEPS (required for user services):")
 	log.Println("1. Reload the systemd manager (MUST BE DONE FIRST):")
-	log.Println("   systemctl --user daemon-reload")
+	log.Println("   systemctl daemon-reload")
 	log.Println("2. Enable the service to start on boot:")
-	log.Println("   systemctl --user enable diskalert.service")
+	log.Println("   systemctl enable diskalert.service")
 	log.Println("3. Start the service now:")
-	log.Println("   systemctl --user start diskalert.service")
+	log.Println("   systemctl start diskalert.service    --or--    service diskalert start")
     log.Println("4. Check the service status:")
-	log.Println("   systemctl --user status diskalert.service")
+	log.Println("   systemctl status diskalert.service    --or--    service diskalert status")
     log.Println("----------------------------------------------------------------")
     
 	return nil
