@@ -133,17 +133,6 @@ func SendAlertsToAllSubscribers(title string, message string) error {
 		log.Println("No active subscriptions found. Skipping push notification.")
 		return nil
 	}
-	
-	// --- SIMPLIFICATION: Get keys directly from APP variables ---
-	publicKey := APP.vapidPublic64
-	privateKey := APP.vapidPrivateContent
-	
-	if publicKey == "" || privateKey == "" {
-		// This should theoretically not happen if setupVAPIDKeys ran correctly
-		log.Println("VAPID keys are missing from APP variables. Cannot send push notification.")
-		return nil
-	}
-	// --- END SIMPLIFICATION ---
 
 	payload := NotificationPayload{
 		Title: title,
@@ -167,8 +156,8 @@ func SendAlertsToAllSubscribers(title string, message string) error {
 
 		resp, err := webpush.SendNotification(payloadBytes, wpSub, &webpush.Options{
 			Subscriber: 	 "mailto:admin@your-disk-monitor.com", 
-			VAPIDPublicKey: 	publicKey,
-			VAPIDPrivateKey: privateKey,
+			VAPIDPublicKey: 	APP.vapidPublic64,
+			VAPIDPrivateKey: APP.vapidPrivateContent,
 			TTL: 	 			60 * 60 * 24, // 24 hours
 		})
 
