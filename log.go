@@ -17,7 +17,10 @@ func setupLogger() *os.File {
 		return nil
 	}
 
-	finalLogPath := resolveConfigPath(APP.cfg.LogFile)
+	finalLogPath, err := resolvePath(APP.cfg.LogFile)
+	if err != nil {
+		log.Fatalf("Failed to resolve path: %v", err)
+	}
 
 	logDir := filepath.Dir(finalLogPath)
 	if err := os.MkdirAll(logDir, 0755); err != nil {

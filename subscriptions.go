@@ -120,10 +120,64 @@ func GetAllSubscriptions() ([]PushSubscription, error) {
 	return subscriptions, nil
 }
 
-// SendNotification is kept as a placeholder to satisfy potential future calls.
-func SendNotification() {}
+func GetSubscription(endpoint string) (*PushSubscription, error) {
+	query := `SELECT * FROM subscriptions WHERE endpoint = ?`	
+	row := DB.QueryRow(query, endpoint)
+	var sub PushSubscription
+	var p256dh, auth string
+	if err := row.Scan(&sub.Endpoint, &p256dh, &auth); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // Not found
+		}
+		return nil, err
+	}
+	sub.Keys = Keys{
+		P256DH: p256dh,
+		Auth: 	auth,
+	}
+	return &sub, nil
+}
 
-func SendAlertsToAllSubscribers(title string, message string) error {
+func SendNotification(sub PushSubscription, payload NotificationPayload) {
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("failed to marshal notification payload: %v", err)
+	}
+
+	wpSub := &webpush.Subscription{
+			Endpoint: sub.Endpoint,
+			Keys: webpush.Keys{
+				P256dh: sub.Keys.P256DH, 
+				Auth: sub.Keys.Auth,
+			},
+		}
+
+	resp, err := webpush.SendNotification(payloadBytes, wpSub, &webpush.Options{
+		Subscriber: 	 "mailto:admin@your-disk-monitor.com", 
+		VAPIDPublicKey: 	APP.vapidPublic64,
+		VAPIDPrivateKey:    APP.vapidPrivateContent,
+		TTL: 	 			60 * 60 * 24, // 24 hours
+	})
+
+	if err != nil {
+		if resp != nil && (resp.StatusCode == 404 || resp.StatusCode == 410) {
+			log.Printf("Subscription expired/invalid for %s. Deleting from DB...", sub.Endpoint)
+			if removeErr := RemoveSubscription(sub.Endpoint); removeErr != nil {
+				log.Printf("Error cleaning up expired subscription %s: %v", sub.Endpoint, removeErr)
+			}
+		} else {
+			log.Printf("Push notification failed for %s: %v", sub.Endpoint, err)
+		}
+	} else {
+		log.Printf("Successfully sent push notification to %s", sub.Endpoint)
+	}
+	
+	if resp != nil {
+		resp.Body.Close()
+	}
+}
+
+func SendNotificationToAll(title string, message string) error {
 	subs, err := GetAllSubscriptions()
 	if err != nil {
 		return fmt.Errorf("could not retrieve subscriptions: %w", err)
@@ -138,45 +192,11 @@ func SendAlertsToAllSubscribers(title string, message string) error {
 		Title: title,
 		Message: message,
 	}
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal notification payload: %w", err)
-	}
 	
 	log.Printf("Attempting to send alert to %d subscribers...", len(subs))
 
 	for _, sub := range subs {
-		wpSub := &webpush.Subscription{
-			Endpoint: sub.Endpoint,
-			Keys: webpush.Keys{
-				P256dh: sub.Keys.P256DH, 
-				Auth: sub.Keys.Auth,
-			},
-		}
-
-		resp, err := webpush.SendNotification(payloadBytes, wpSub, &webpush.Options{
-			Subscriber: 	 "mailto:admin@your-disk-monitor.com", 
-			VAPIDPublicKey: 	APP.vapidPublic64,
-			VAPIDPrivateKey: APP.vapidPrivateContent,
-			TTL: 	 			60 * 60 * 24, // 24 hours
-		})
-
-		if err != nil {
-			if resp != nil && (resp.StatusCode == 404 || resp.StatusCode == 410) {
-				log.Printf("Subscription expired/invalid for %s. Deleting from DB...", sub.Endpoint)
-				if removeErr := RemoveSubscription(sub.Endpoint); removeErr != nil {
-					log.Printf("Error cleaning up expired subscription %s: %v", sub.Endpoint, removeErr)
-				}
-			} else {
-				log.Printf("Push notification failed for %s: %v", sub.Endpoint, err)
-			}
-		} else {
-			log.Printf("Successfully sent push notification to %s", sub.Endpoint)
-		}
-		
-		if resp != nil {
-			resp.Body.Close()
-		}
+		SendNotification(sub, payload)
 	}
 	return nil
 }

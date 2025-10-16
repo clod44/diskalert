@@ -10,16 +10,6 @@ import (
 	"path/filepath"
 )
 
-// resolveConfigPath resolves a configuration path.
-// If the path is absolute, it returns the path as is.
-// If the path is relative, it resolves it relative to the application's directory (getAppDir()).
-func resolveConfigPath(configPath string) string {
-	if filepath.IsAbs(configPath) {
-		return configPath
-	}
-	return filepath.Join(getAppDir(), configPath)
-}
-
 func statsHandler(w http.ResponseWriter, r *http.Request) {
 	APP.diskStatus.mu.RLock()
 	defer APP.diskStatus.mu.RUnlock()
@@ -115,27 +105,28 @@ func testNotificationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.TargetEndpoint == nil {
-		http.Error(w, "Target endpoint required for notification", http.StatusBadRequest)
+		SendNotificationToAll("Test Notification", "This is a test notification. You can ignore this.")
+		return;
+	}
+	subscription, err := GetSubscription(*req.TargetEndpoint)
+	if err != nil {
+		log.Printf("ERROR: Failed to retrieve subscription for endpoint %s: %v", *req.TargetEndpoint, err)
+		http.Error(w, "Failed to retrieve subscription", http.StatusInternalServerError)
 		return
 	}
-	/*
-	if err := SendNotification(req.TargetEndpoint, NotificationPayload{Title: "Test Notification", Message: "This is a test notification. you can ignore this"}); err != nil {
-		log.Printf("ERROR: Failed to send notification: %v", err)
-		http.Error(w, "Failed to send notification", http.StatusInternalServerError)
-		return
-	}
-	*/
+	SendNotification(*subscription, NotificationPayload{Title: "Test Notification", Message: "This is a test notification. you can ignore this"})
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"message": "Notification sent successfully"}`))
 }
 
 func handleCertDownload(w http.ResponseWriter, r *http.Request) {
-	// Use the new resolver function
-	certFilePath := resolveConfigPath(APP.cfg.CertFile)
-	
-	// Use filepath.Base to get just the filename for the Content-Disposition header
+	certFilePath, err := resolvePath(APP.cfg.CertFile)
+	if err != nil {
+		log.Printf("ERROR: Failed to resolve path for certificate file: %v", err)
+		http.Error(w, "Failed to resolve path for certificate file.", http.StatusInternalServerError)
+		return
+	}
 	certFileName := filepath.Base(APP.cfg.CertFile) 
-
 	if _, err := os.Stat(certFilePath); os.IsNotExist(err) {
 		log.Printf("Certificate file not found at: %s", certFilePath)
 		http.Error(w, "Certificate file not found.", http.StatusNotFound)
@@ -148,10 +139,17 @@ func handleCertDownload(w http.ResponseWriter, r *http.Request) {
 }
 
 func startWebServer() {
-	// Use the new resolver function for both certificate and key files
-	var certFilePath = resolveConfigPath(APP.cfg.CertFile)
-	var keyFilePath = resolveConfigPath(APP.cfg.KeyFile)
-
+	certFilePath, err := resolvePath(APP.cfg.CertFile)
+	if err != nil {
+		log.Printf("ERROR: Failed to resolve path for certificate file: %v", err)
+		return
+	}
+	keyFilePath, err := resolvePath(APP.cfg.KeyFile)
+	if err != nil {
+		log.Printf("ERROR: Failed to resolve path for key file: %v", err)
+		return
+	}
+	
 	http.HandleFunc("/api/stats", statsHandler)
 	http.HandleFunc("/api/vapid-key", vapidKeyHandler)
 	http.HandleFunc("/api/subscribe", subscribeHandler)

@@ -44,7 +44,7 @@ func main() {
 				"Disk usage is over threshold! %.1f%%. Contact integration team",
 				APP.diskStatus.UsedPercent,
 			)
-			err := SendAlertsToAllSubscribers("DISK USAGE ALERT", alertMessage) 
+			err := SendNotificationToAll("DISK USAGE ALERT", alertMessage) 
 			if err != nil { 
 				log.Printf("Error sending alerts: %v", err)
 			}
