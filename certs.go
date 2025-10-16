@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+
+
 func validateExistingCert(certPath string, expectedIP string) bool {
 	data, err := os.ReadFile(certPath)
 	if err != nil {
@@ -25,47 +27,63 @@ func validateExistingCert(certPath string, expectedIP string) bool {
 		log.Printf("Error decoding PEM block from certificate file %s.", certPath)
 		return false
 	}
+
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
 		log.Printf("Error parsing certificate from file %s: %v", certPath, err)
 		return false
 	}
+
 	if time.Now().After(cert.NotAfter) {
 		log.Printf("CRITICAL: Certificate in %s expired on %s. Regeneration required.", certPath, cert.NotAfter.Format(time.RFC822))
 		return false
 	}
+
 	targetIP := net.ParseIP(expectedIP)
 	if targetIP == nil {
 		log.Printf("CRITICAL: Configured IP address '%s' in the config file is not a valid IP address for certificate validation.", expectedIP)
 		return false
 	}
+
 	for _, ip := range cert.IPAddresses {
 		if ip.Equal(targetIP) {
 			return true
 		}
 	}
+
 	log.Printf("Validation failed: Certificate does not contain required IP %s in its SAN list.", expectedIP)
 	return false
 }
 
 func setupTLSFiles() {
-	certFilePath := filepath.Join(cfg.CertDir, cfg.CertFileName)
-	keyFilePath := filepath.Join(cfg.CertDir, cfg.KeyFileName)
+	certFilePath, err := resolvePath(APP.cfg.CertFile)
+	if err != nil {
+		log.Fatalf("Fatal path error for CertFile: %v", err)
+	}
+	keyFilePath, err := resolvePath(APP.cfg.KeyFile)
+	if err != nil {
+		log.Fatalf("Fatal path error for KeyFile: %v", err)
+	}
 
-	if err := os.MkdirAll(cfg.CertDir, 0700); err != nil {
-		log.Fatalf("Failed to create TLS directory %s: %v", cfg.CertDir, err)
+	certDir := filepath.Dir(certFilePath) 
+
+	if err := os.MkdirAll(certDir, 0755); err != nil { 
+		log.Fatalf("Failed to create certificate directory %s: %v", certDir, err)
 	}
 
 	if _, err := os.Stat(certFilePath); err == nil {
 		if _, err := os.Stat(keyFilePath); err == nil {
-			log.Printf("Found existing TLS files in %s. Using them.", cfg.CertDir)
-			isIPValid := validateExistingCert(certFilePath, cfg.IP)
+			
+			log.Printf("Found existing TLS files in %s. Using them.", certDir)
+			
+			isIPValid := validateExistingCert(certFilePath, APP.cfg.IP)
+			
 			if !isIPValid {
 				log.Printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 				log.Printf("!! CRITICAL SECURITY ERROR: CERTIFICATE STALE !!")
-				log.Printf("!! The IP address configured (%s) is NOT present in the existing certificate's SAN list.", cfg.IP)
-				log.Printf("!! Due to a mismatch between the configured IP and the certificate, the connection will fail.")
-				log.Printf("!! ACTION REQUIRED: Stop the app, manually delete %s and %s from %s, and restart.", cfg.CertFileName, cfg.KeyFileName, cfg.CertDir)
+				log.Printf("!! The IP address configured (%s) is NOT present in the existing certificate's SAN list, OR the certificate has expired.", APP.cfg.IP)
+				log.Printf("!! WARNING: The web server will start, but connections from %s will FAIL with 'unknown certificate' errors.", APP.cfg.IP)
+				log.Printf("!! ACTION REQUIRED: To fix this, stop the app, manually delete %s and %s, and restart.", certFilePath, keyFilePath)
 				log.Printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 			}
 			return
@@ -85,31 +103,33 @@ func setupTLSFiles() {
 	serialNumber, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 
 	ipList := []net.IP{net.ParseIP("127.0.0.1")}
+    commonName := "diskalert.local"
 
-	if cfg.IP != "" {
-		configuredIP := net.ParseIP(cfg.IP)
+	if APP.cfg.IP != "" {
+		configuredIP := net.ParseIP(APP.cfg.IP)
 		if configuredIP == nil {
-			log.Fatalf("Configured IP address '%s' is invalid. Please check the config file.", cfg.IP)
+			log.Fatalf("Configured IP address '%s' is invalid. Please check the config file.", APP.cfg.IP)
 		}
 		ipList = append(ipList, configuredIP)
 	} else {
-		log.Printf("WARNING: Configuration field 'IP' is empty. Certificate only valid for 127.0.0.1 and 'diskalert.local'.")
+		log.Printf("WARNING: Configuration field 'IP' is empty. Certificate only valid for 127.0.0.1 and '%s'.", commonName)
 	}
 
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			Organization: []string{"DiskAlert Self-Signed CA"},
-			CommonName:   "diskalert.local",
+			CommonName:   commonName,
 		},
 		NotBefore: notBefore,
 		NotAfter:  notAfter,
 
-		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 		IsCA:                  true,
 		IPAddresses:           ipList,
+        DNSNames: []string{commonName},
 	}
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
@@ -135,5 +155,5 @@ func setupTLSFiles() {
 	}
 	keyOut.Close()
 
-	log.Printf("Successfully generated and saved self-signed TLS files to %s.", cfg.CertDir)
+	log.Printf("Successfully generated and saved self-signed TLS files to %s and %s.", certFilePath, keyFilePath)
 }

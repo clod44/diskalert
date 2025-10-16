@@ -10,7 +10,7 @@ self.addEventListener('push', (event) => {
         try {
             const data = event.data.json();
             payload.title = data.title || payload.title;
-            payload.body = data.body || payload.body;
+            payload.body = data.message || payload.body;
         } catch (e) {
             payload.body = event.data.text();
         }

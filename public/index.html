@@ -5,6 +5,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
     <title>DiskAlert Dashboard</title>
 </head>
 
@@ -12,13 +13,21 @@
     <h1>Disk Monitor Status</h1>
     <button id="subscribe-btn">Subscribe</button>
     <button id="unsubscribe-btn">Unsubscribe</button>
-    <a href="/download/cert" target="_blank" rel="noopener noreferrer"><button>Download
-            Cert</button></a>
+    <a href="/download/cert" target="_blank" rel="noopener noreferrer">
+        <button>Download Cert</button>
+    </a>
+    <div style="border: gray solid 3px; padding:0.2em; display:inline-block;">
+        <input type="text" placeholder="endpoint stored in the database" id="test-notification-endpoint">
+        <button id="test-notification">Test Notification</button>
+    </div>
+    <button id="test-notification-all">Test Notification (all)</button>
     <hr>
     <p id="last-check"></p>
     <pre id="stats"></pre>
     <hr>
-    <button id="subscriptions-btn">Subscriptions</button>
+    <p>your subscription data:</p>
+    <pre id="subscription-data">null</pre>
+    <hr><button id="subscriptions-btn">Subscriptions</button>
     <pre id="subscriptions"></pre>
 
     <script src="index.js"></script>

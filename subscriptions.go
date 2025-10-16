@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
@@ -14,24 +13,20 @@ import (
 
 type Keys struct {
 	P256DH string `json:"p256dh"`
-	Auth   string `json:"auth"`
+	Auth 	 string `json:"auth"`
 }
 
 type PushSubscription struct {
 	Endpoint string `json:"endpoint"`
-	Keys     Keys   `json:"keys"`
+	Keys 	 Keys 	`json:"keys"`
 }
+
 type NotificationPayload struct {
-    Title   string        `json:"title"`  
-	Message string        `json:"message"` 
+	Title 	string 	`json:"title"` 	
+	Message string 	`json:"message"` 
 }
 
-type Subscription struct {
-	Endpoint string
-	P256DH   string
-	Auth     string
-}
-
+// DB is the global database connection pool.
 var DB *sql.DB
 
 func InitSubscriptionDB() {
@@ -113,7 +108,7 @@ func GetAllSubscriptions() ([]PushSubscription, error) {
 		
 		sub.Keys = Keys{
 			P256DH: p256dh,
-			Auth:   auth,
+			Auth: 	auth,
 		}
 		subscriptions = append(subscriptions, sub)
 	}
@@ -124,6 +119,10 @@ func GetAllSubscriptions() ([]PushSubscription, error) {
 
 	return subscriptions, nil
 }
+
+// SendNotification is kept as a placeholder to satisfy potential future calls.
+func SendNotification() {}
+
 func SendAlertsToAllSubscribers(title string, message string) error {
 	subs, err := GetAllSubscriptions()
 	if err != nil {
@@ -134,21 +133,17 @@ func SendAlertsToAllSubscribers(title string, message string) error {
 		log.Println("No active subscriptions found. Skipping push notification.")
 		return nil
 	}
-
-	publicKeyPath := filepath.Join(getAppDir(), cfg.VapidDir, cfg.VapidPublicKey) 
-	privateKeyPath := filepath.Join(getAppDir(), cfg.VapidDir, cfg.VapidSecretKey)
-    
-	rawPublicKey, err := os.ReadFile(publicKeyPath)
-	if err != nil {
-		return fmt.Errorf("failed to read VAPID public key file %s: %w", publicKeyPath, err)
-	}
-	publicKey := string(rawPublicKey) 
 	
-	rawPrivateKey, err := os.ReadFile(privateKeyPath)
-	if err != nil {
-		return fmt.Errorf("failed to read VAPID secret key file %s: %w", privateKeyPath, err)
+	// --- SIMPLIFICATION: Get keys directly from APP variables ---
+	publicKey := APP.vapidPublic64
+	privateKey := APP.vapidPrivateContent
+	
+	if publicKey == "" || privateKey == "" {
+		// This should theoretically not happen if setupVAPIDKeys ran correctly
+		log.Println("VAPID keys are missing from APP variables. Cannot send push notification.")
+		return nil
 	}
-	privateKey := string(rawPrivateKey) 
+	// --- END SIMPLIFICATION ---
 
 	payload := NotificationPayload{
 		Title: title,
@@ -171,10 +166,10 @@ func SendAlertsToAllSubscribers(title string, message string) error {
 		}
 
 		resp, err := webpush.SendNotification(payloadBytes, wpSub, &webpush.Options{
-			Subscriber:      "mailto:admin@your-disk-monitor.com", 
-			VAPIDPublicKey:  publicKey,
+			Subscriber: 	 "mailto:admin@your-disk-monitor.com", 
+			VAPIDPublicKey: 	publicKey,
 			VAPIDPrivateKey: privateKey,
-			TTL:             60 * 60 * 24,
+			TTL: 	 			60 * 60 * 24, // 24 hours
 		})
 
 		if err != nil {

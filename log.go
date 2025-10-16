@@ -1,32 +1,29 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
-	"encoding/json"
 )
 
 func setupLogger() *os.File {
-	var logFileName string = "diskalert.log"
-	log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
+	log.SetFlags(log.Ldate | log.Lmicroseconds)
 
-	if !cfg.LogToFile {
+	if !APP.cfg.LogToFile {
 		log.SetOutput(os.Stderr)
 		log.Println("Logger initialized. Logging to console only (LogToFile disabled in config).")
 		return nil
 	}
 
-	appDir := getAppDir()
-	finalLogPath := ""
+	finalLogPath := resolveConfigPath(APP.cfg.LogFile)
 
-	if filepath.IsAbs(cfg.LogFilePath) {
-		finalLogPath = filepath.Join(cfg.LogFilePath, logFileName)
-	} else if cfg.LogFilePath == "./" {
-		finalLogPath = filepath.Join(appDir, logFileName)
-	} else {
-		finalLogPath = filepath.Join(appDir, cfg.LogFilePath, logFileName)
+	logDir := filepath.Dir(finalLogPath)
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		log.Printf("WARNING: Failed to create log directory %s: %v. Logging only to console.", logDir, err)
+		log.SetOutput(os.Stderr)
+		return nil
 	}
 
 	logFile, err := os.OpenFile(finalLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
@@ -35,10 +32,10 @@ func setupLogger() *os.File {
 	}
 
 	multiWriter := io.MultiWriter(os.Stderr, logFile)
-
+	
 	log.SetOutput(multiWriter)
 	log.Println("Utility Started. Logging output redirected to file and console.")
-
+	
 	return logFile
 }
 
