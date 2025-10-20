@@ -12,8 +12,8 @@ const configFileName = "diskalert.conf"
 
 type Config struct {
 	LogToFile            bool   `json:"log_to_file"`
-	LogFile          string `json:"log_file"`
-	DiskPath             string `json:"disk_path"`
+	LogFile          	 string `json:"log_file"`
+	ExcludePaths         []string `json:"exclude_paths"`
 	Threshold            int    `json:"threshold"`
 	CheckIntervalSeconds int    `json:"check_interval_seconds"`
 	Port                 int    `json:"port"`
@@ -28,7 +28,7 @@ func getDefaultConfig() Config {
 	return Config{
 		LogToFile:            true,
 		LogFile:              "./logs/diskalert.log",
-		DiskPath:             "/",
+		ExcludePaths:         []string{"/sys", "/proc", "/dev", "/run"}, 
 		Threshold:            80,
 		CheckIntervalSeconds: 5,
 		Port:                 6969,

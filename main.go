@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"time"
 )
@@ -27,31 +26,54 @@ func main() {
 
 	setupTLSFiles()     // this gotta be a blocking process so web server doesn't start before this
 	InitSubscriptionDB()
+	InitDiskHistoryDB()
 	setupVAPIDKeys()
 	go startWebServer() //"go" makes it a background process type shi without blocking the flow
 	ManageServiceFile()
 	
 	interval := time.Duration(APP.cfg.CheckIntervalSeconds) * time.Second
-	log.Printf("Monitoring %s every %d seconds. Threshold is %d%%.", APP.cfg.DiskPath, APP.cfg.CheckIntervalSeconds, APP.cfg.Threshold)
+	log.Printf("Monitoring %s every %d seconds. Threshold for all disks is %d%%.", APP.cfg.CheckIntervalSeconds, APP.cfg.Threshold)
 	log.Println("--------------------------------------------------------------------------------")
 
 	for {
 		log.Println("Checking disk stats...")
 		UpdateDiskStatus() 
 		
-		if(APP.diskStatus.IsAlert){
-			 alertMessage := fmt.Sprintf(
-				"Disk usage is over threshold! %.1f%%. Contact integration team",
-				APP.diskStatus.UsedPercent,
-			)
-			err := SendNotificationToAll("DISK USAGE ALERT", alertMessage) 
-			if err != nil { 
-				log.Printf("Error sending alerts: %v", err)
-			}
-		}
+		logMonitoredDisks(APP.diskStatus.Records)
 
 		nextCheckTime := time.Now().Add(interval)
 		log.Printf("Next check will be %d seconds later, at %s.", APP.cfg.CheckIntervalSeconds, nextCheckTime.Format("15:04:05"))
 		time.Sleep(interval)
 	}
+}
+
+func logMonitoredDisk(disk MonitoredDisk) {
+	log.Printf("  Disk: [%.1f%%] %s (%d bytes used / %d bytes total) (%s)", disk.UsedPercent, disk.DiskPath, disk.UsedBytes, disk.TotalBytes, disk.UUID)
+}
+
+func logMonitoredDisks(disks []MonitoredDisk) (bool) {
+	APP.diskStatus.mu.RLock()
+	defer APP.diskStatus.mu.RUnlock()
+
+	overallAlert := false
+	
+	log.Printf("Disk Usage Alert Report (Threshold: %d%%)", APP.cfg.Threshold)
+	log.Println("--------------------------------------------------")
+
+	for _, disk := range disks{
+		if disk.IsAlert {
+			overallAlert = true
+			logMonitoredDisk(disk)
+			log.Println("")
+		}
+	}
+
+	if overallAlert {
+		log.Println("--------------------------------------------------")
+		log.Println("CRITICAL ALERT: One or more disks are over the usage threshold.")
+	} else {
+		log.Println("INFO: No disks currently in alert state.")
+	}
+
+	return overallAlert
 }

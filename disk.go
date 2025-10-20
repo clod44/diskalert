@@ -1,7 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -9,50 +12,138 @@ import (
 )
 
 type DiskStatus struct {
-	mu          sync.RWMutex
-	DiskPath    string  `json:"disk_path"`
-	Threshold   int     `json:"threshold"`
-	TotalGB     float64 `json:"total_gb"`
-	FreeGB      float64 `json:"free_gb"`
+	mu       sync.RWMutex
+	Records   []MonitoredDisk `json:"records"`
+	LastCheck string       `json:"last_check"`
+	IsAlert    bool          `json:"is_alert"`
+}
+
+type MonitoredDisk struct {
+	DiskPath   string `json:"disk_path"`
+	UUID      string `json:"uuid"`
+	TotalBytes uint64 `json:"total_bytes"`
+	UsedBytes   uint64 `json:"used_bytes"`
 	UsedPercent float64 `json:"used_percent"`
-	IsAlert     bool    `json:"is_alert"`
-	LastCheck   string  `json:"last_check"`
+	IsAlert    bool   `json:"is_alert"`
+}
+
+var DiskUUIDMap = make(map[string]string)
+
+func findUUIDForDevice(devicePath string) string {
+	if identifier, ok := DiskUUIDMap[devicePath]; ok {
+		return identifier
+	}
+
+	uuid, err := getUUIDFromSymlinks(devicePath)
+	if err == nil && uuid != "" {
+		DiskUUIDMap[devicePath] = uuid
+		return uuid
+	}
+
+	DiskUUIDMap[devicePath] = devicePath
+	return devicePath
+}
+
+func getUUIDFromSymlinks(devicePath string) (string, error) {
+	deviceBase := filepath.Base(devicePath)
+	
+	dirEntries, err := os.ReadDir("/dev/disk/by-uuid")
+	if err != nil {
+		return "", err
+	}
+
+	for _, entry := range dirEntries {
+		if entry.Type()&os.ModeSymlink != 0 {
+			symlinkPath := filepath.Join("/dev/disk/by-uuid", entry.Name())
+			targetPath, err := os.Readlink(symlinkPath)
+			if err != nil {
+				continue
+			}
+
+			cleanTarget := filepath.Clean(targetPath)
+			targetBase := filepath.Base(cleanTarget)
+
+			if targetBase == deviceBase {
+				return entry.Name(), nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("UUID not found for device %s", devicePath)
+}
+
+func isExcluded(path string) bool {
+	for _, excludedPath := range APP.cfg.ExcludePaths {
+		if path == excludedPath {
+			return true
+		}
+	}
+	return false
 }
 
 func UpdateDiskStatus() {
-	usage, err := disk.Usage(APP.cfg.DiskPath)
+	partitions, err := disk.Partitions(true)
 	if err != nil {
-		log.Printf("ERROR: Could not get disk usage for path %s: %v", APP.cfg.DiskPath, err)
+		log.Printf("ERROR: Failed to list disk partitions: %v", err)
 		return
 	}
 
-	percent := usage.UsedPercent
-	totalGB := float64(usage.Total) / 1024 / 1024 / 1024
-	freeGB := float64(usage.Free) / 1024 / 1024 / 1024
-	isAlert := int(percent) >= APP.cfg.Threshold
+	var currentMonitors []MonitoredDisk
 
-	// --- Logging Output ---
-	log.Printf("--- Disk Usage Report for %s ---\n", APP.cfg.DiskPath)
-	log.Printf("Total: %.2f GB\n", totalGB)
-	log.Printf("Free:  %.2f GB\n", freeGB)
-	log.Printf("Used:  %.1f%%\n", percent)
+	for _, p := range partitions {
+		mountPoint := p.Mountpoint
 
-	if isAlert {
-		log.Printf("!!! ALERT: Disk usage (%.1f%%) exceeds threshold (%d%%) !!!\n", percent, APP.cfg.Threshold)
-	} else {
-		log.Println("Disk usage is nominal.")
+		if isExcluded(mountPoint) {
+			continue
+		}
+
+		usage, err := disk.Usage(mountPoint)
+		if err != nil {
+			log.Printf("ERROR: Could not get disk usage for mount point %s: %v", mountPoint, err)
+			continue
+		}
+		
+		if usage.Total == 0 || usage.Fstype == "tmpfs" || usage.Fstype == "devtmpfs" {
+			continue
+		}
+		
+		percent := usage.UsedPercent
+		totalBytes := usage.Total
+		usedBytes := usage.Used
+		isAlert := int(percent) >= APP.cfg.Threshold
+		
+		diskUUID := findUUIDForDevice(p.Device)
+		
+		record := NewDiskRecord{
+			DiskPath:      mountPoint,
+			UUID:         diskUUID,
+			TotalSize:   totalBytes,
+			UsedSize:   usedBytes,
+			AvailableSize: totalBytes - usedBytes,
+			UsedPercentage: percent,
+		}
+
+		SaveDiskRecord(record)
+
+		log.Printf("--- Disk Report: %s (UUID: %s) ---", mountPoint, diskUUID)
+		log.Printf("Total: %d bytes", totalBytes)
+		log.Printf("Used:   %d bytes (%.1f%%)", usedBytes, percent)
+		if isAlert {
+			log.Printf("!!! ALERT: Usage exceeds threshold (%d%%) !!!", APP.cfg.Threshold)
+		}
+
+		currentMonitors = append(currentMonitors, MonitoredDisk{
+			DiskPath:   mountPoint,
+			UUID:      diskUUID,
+			TotalBytes: totalBytes,
+			UsedBytes:   usedBytes,
+			UsedPercent: percent,
+			IsAlert:    isAlert,
+		})
 	}
 
-	// --- Update Shared Status (Thread Safe) ---
-	// Acquire write lock to ensure no web requests read incomplete data
 	APP.diskStatus.mu.Lock()
-
-	APP.diskStatus.TotalGB = totalGB
-	APP.diskStatus.FreeGB = freeGB
-	APP.diskStatus.UsedPercent = percent
-	APP.diskStatus.IsAlert = isAlert
-	APP.diskStatus.LastCheck = time.Now().Format("2006-01-02 15:04:05") // Standard Go time format
-
-	// Release the lock
+	APP.diskStatus.Records = currentMonitors
+	APP.diskStatus.LastCheck = time.Now().Format("2006-01-02 15:04:05")
 	APP.diskStatus.mu.Unlock()
 }
