@@ -90,17 +90,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return `${tooltipItem.dataset.label}: ${formatBytes(value)}`;
     };
-
     function createDiskChart(uuid, historyRecords, diskPath) {
+        const historicalRecords = historyRecords.filter(record => !record.Prediction);
+        const predictionRecords = historyRecords.filter(record => record.Prediction);
+        const usedHistoricalData = historicalRecords.map(record => ({
+            x: record.Timestamp * 1000,
+            y: record.UsedSize
+        }));
+        let usedPredictionData = [];
+        if (historicalRecords.length > 0) {
+            const lastHistoryPoint = usedHistoricalData[usedHistoricalData.length - 1];
+            usedPredictionData.push(lastHistoryPoint);
+
+            predictionRecords.forEach(record => {
+                usedPredictionData.push({
+                    x: record.Timestamp * 1000,
+                    y: record.UsedSize
+                });
+            });
+        }
         const div = document.getElementById(uuid);
         const totalData = historyRecords.map(record => ({
             x: record.Timestamp * 1000,
             y: record.TotalSize
         }));
-        const usedData = historyRecords.map(record => ({
-            x: record.Timestamp * 1000,
-            y: record.UsedSize
-        }));
+
         let chartWrapper = div.querySelector(`#chart-wrapper-${uuid}`);
         if (!chartWrapper) {
             chartWrapper = document.createElement('div');
@@ -123,27 +137,38 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.style.height = '256px';
         chartWrapper.appendChild(canvas);
         const ctx = canvas.getContext('2d');
+
         chartInstances[uuid] = new Chart(ctx, {
             type: 'line',
             data: {
                 datasets: [
                     {
-                        label: 'Used Size',
-                        data: usedData,
+                        label: 'Used Size (Actual)',
+                        data: usedHistoricalData,
                         borderColor: 'rgba(255, 0, 0, 1)',
-                        backgroundColor: 'rgba(200, 0, 0, 1)',
+                        backgroundColor: 'rgba(200, 0, 0, 0.2)',
                         borderWidth: 2,
-                        fill: true,
+                        fill: 'origin',
                         pointRadius: 2,
+                    },
+                    {
+                        label: 'Used Size (Forecast)',
+                        data: usedPredictionData,
+                        borderColor: 'rgba(255, 165, 0, 1)',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        fill: false,
+                        pointRadius: 1,
                     },
                     {
                         label: 'Total Size',
                         data: totalData,
                         borderColor: 'rgba(0, 255, 0, 1)',
-                        backgroundColor: 'rgba(0, 200, 0, 1))',
+                        backgroundColor: 'rgba(0, 200, 0, 0.2)',
                         borderWidth: 2,
-                        fill: true,
-                        pointRadius: 2,
+                        fill: false,
+                        pointRadius: 0,
                     }
                 ]
             },
@@ -192,7 +217,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-
     async function showDiskHistory(uuid) {
         try {
             const response = await fetch(`/api/stats?uuid=${uuid}&limit=30`, {
@@ -202,8 +226,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const historyRecords = await response.json();
-            if (historyRecords.length === 0) {
+            if (!historyRecords || historyRecords.length === 0) {
                 console.log(`No history data available for ${uuid}.`);
+                const div = document.getElementById(uuid);
+                if (div) {
+                    const chartWrapper = div.querySelector(`#chart-wrapper-${uuid}`);
+                    if (chartWrapper) {
+                        chartWrapper.innerHTML = `No historical data available for ${uuid}.`;
+                    }
+                }
                 return;
             }
             const diskPath = historyRecords[0].DiskPath;

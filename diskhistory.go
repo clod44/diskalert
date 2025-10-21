@@ -18,7 +18,7 @@ type NewDiskRecord struct {
 	DiskPath         string  // The mount point
 	TotalSize        uint64 //Bytes
 	UsedSize         uint64 //Bytes
-	AvailableSize  uint64 
+	AvailableSize  	 uint64 
 	UsedPercentage   float64 // 0-100
 	UUID             string  
 }
@@ -30,9 +30,10 @@ type DiskRecord struct {
 	DiskPath         string
 	TotalSize        float64
 	UsedSize         float64
-	AvailableSizeGB  float64
+	AvailableSize    float64
 	UsedPercentage   float64
 	UUID             string
+	Prediction		 int64
 }
 
 func InitDiskHistoryDB() {
@@ -57,23 +58,26 @@ func InitDiskHistoryDB() {
 	}
 
 	createTableSQL := `
-	CREATE TABLE IF NOT EXISTS DiskRecords (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		timestamp INTEGER NOT NULL,
-		disk_path TEXT NOT NULL,
-		uuid TEXT NOT NULL,
-		total_size REAL NOT NULL,
-		used_size REAL NOT NULL,
-		available_size REAL NOT NULL,
-		used_percentage REAL NOT NULL,
-		UNIQUE(timestamp, uuid)
-	);
-	CREATE INDEX IF NOT EXISTS idx_uuid_time ON DiskRecords (uuid, timestamp DESC);`
-
+    CREATE TABLE IF NOT EXISTS DiskRecords (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL,
+        disk_path TEXT NOT NULL,
+        uuid TEXT NOT NULL,
+        total_size REAL NOT NULL,
+        used_size REAL NOT NULL,
+        available_size REAL NOT NULL,
+        used_percentage REAL NOT NULL,
+        prediction INTEGER DEFAULT 0, 
+        UNIQUE(timestamp, uuid)
+    );`
 	if _, err := diskHistoryDB.Exec(createTableSQL); err != nil {
 		log.Fatalf("FATAL: Failed to create DiskRecords table: %v", err)
 	}
-
+    createIndexSQL := `
+    CREATE INDEX IF NOT EXISTS idx_uuid_time ON DiskRecords (uuid, timestamp DESC);`   
+	if _, err := diskHistoryDB.Exec(createIndexSQL); err != nil {
+		log.Fatalf("FATAL: Failed to create DiskRecords index: %v", err)
+	}
 	log.Printf("INFO: Disk History database initialized successfully at %s", dbPath)
 }
 
@@ -110,7 +114,7 @@ func GetDiskRecords(uuid string, limit int) ([]DiskRecord, error) {
 	}
 
 	query := `
-	SELECT id, timestamp, disk_path, uuid, total_size, used_size, available_size, used_percentage 
+	SELECT id, timestamp, disk_path, uuid, total_size, used_size, available_size, used_percentage, prediction 
 	FROM DiskRecords 
 	WHERE uuid = ?
 	ORDER BY timestamp DESC
@@ -125,13 +129,14 @@ func GetDiskRecords(uuid string, limit int) ([]DiskRecord, error) {
 	var records []DiskRecord
 	for rows.Next() {
 		var r DiskRecord
-		err := rows.Scan(&r.ID, &r.Timestamp, &r.DiskPath, &r.UUID, &r.TotalSize, &r.UsedSize, &r.AvailableSizeGB, &r.UsedPercentage)
+		err := rows.Scan(&r.ID, &r.Timestamp, &r.DiskPath, &r.UUID, &r.TotalSize, &r.UsedSize, &r.AvailableSize, &r.UsedPercentage, &r.Prediction)
 		if err != nil {
 			log.Printf("WARN: Failed to scan DiskRecord row: %v", err)
 			continue
 		}
 		records = append(records, r)
 	}
-
-	return records, rows.Err()
+	var newPredictions = GeneratePredictions(records, 10, int64(APP.cfg.CheckIntervalSeconds))
+    var combinedRecords = append(records, newPredictions...) 
+    return combinedRecords, rows.Err()
 }
