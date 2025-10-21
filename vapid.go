@@ -32,7 +32,7 @@ func decodePrivateKey(encodedPrivKey string) (*ecdsa.PrivateKey, string) {
 	return privateKey, pubKeyEncoded
 }
 
-func setupVAPIDKeys() {
+func SetupVAPIDKeys() {
 	privKeyPath, err := resolvePath(APP.cfg.VapidPrivate)
 	if err != nil {
 		log.Fatalf("Fatal path error for VapidPrivate: %v", err)

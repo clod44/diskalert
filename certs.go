@@ -55,7 +55,7 @@ func validateExistingCert(certPath string, expectedIP string) bool {
 	return false
 }
 
-func setupTLSFiles() {
+func SetupTLSFiles() {
 	certFilePath, err := resolvePath(APP.cfg.CertFile)
 	if err != nil {
 		log.Fatalf("Fatal path error for CertFile: %v", err)

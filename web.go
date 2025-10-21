@@ -138,7 +138,7 @@ func handleCertDownload(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Served certificate file: %s to client %s", certFileName, r.RemoteAddr)
 }
 
-func startWebServer() {
+func StartWebServer() {
 	certFilePath, err := resolvePath(APP.cfg.CertFile)
 	if err != nil {
 		log.Printf("ERROR: Failed to resolve path for certificate file: %v", err)

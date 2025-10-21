@@ -24,11 +24,11 @@ func main() {
 	}
 
 
-	setupTLSFiles()     // this gotta be a blocking process so web server doesn't start before this
+	SetupTLSFiles()     // this gotta be a blocking process so web server doesn't start before this
 	InitSubscriptionDB()
 	InitDiskHistoryDB()
-	setupVAPIDKeys()
-	go startWebServer() //"go" makes it a background process type shi without blocking the flow
+	SetupVAPIDKeys()
+	go StartWebServer() //"go" makes it a background process type shi without blocking the flow
 	ManageServiceFile()
 	
 	interval := time.Duration(APP.cfg.CheckIntervalSeconds) * time.Second
