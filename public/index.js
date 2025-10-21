@@ -28,21 +28,202 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchStats() {
         try {
-            const response = await fetch('/api/stats');
+            const response = await fetch("/api/stats", {
+                method: 'GET'
+            });
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const data = await response.json();
             console.log(data);
-            const formattedJson = JSON.stringify(data, null, 2);
-            document.getElementById("stats").textContent = formattedJson;
+            const statsDiv = document.getElementById("stats");
+            statsDiv.innerHTML = '' //delete all children
+            destroyAllCharts();
+            //create children again
+            data.records.forEach(record => {
+                const div = document.createElement("div");
+                div.id = record.uuid;
+                div.style.display = "flex";
+                div.style.gap = "20px";
+                const pre = document.createElement("pre");
+                pre.style.flexShrink = "0";
+                pre.style.width = "400px";
+                pre.textContent = JSON.stringify(record, null, 2);
+                div.appendChild(pre);
+                statsDiv.appendChild(div);
+                showDiskHistory(record.uuid);
+            });
         } catch (error) {
             console.error("Error fetching metrics:", error);
         }
     }
     fetchStats();
-    setInterval(fetchStats, 5000);
+    var fetchStatusDuration = 60000;
+    setInterval(fetchStats, fetchStatusDuration);
+    const chartInstances = {};
 
+    function destroyAllCharts() {
+        for (const uuid in chartInstances) {
+            if (Object.hasOwnProperty.call(chartInstances, uuid)) {
+                const chart = chartInstances[uuid];
+                if (chart && typeof chart.destroy === 'function') {
+                    chart.destroy();
+                    delete chartInstances[uuid];
+                }
+            }
+        }
+        console.log("All previous Chart.js instances have been destroyed.");
+    }
+
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    const sizeTooltipFormatter = (tooltipItem) => {
+        const value = tooltipItem.parsed.y;
+        if (isNaN(value)) {
+            return `${tooltipItem.dataset.label}: Data Not Available`;
+        }
+        return `${tooltipItem.dataset.label}: ${formatBytes(value)}`;
+    };
+
+    function createDiskChart(uuid, historyRecords, diskPath) {
+        const div = document.getElementById(uuid);
+        const totalData = historyRecords.map(record => ({
+            x: record.Timestamp * 1000,
+            y: record.TotalSize
+        }));
+        const usedData = historyRecords.map(record => ({
+            x: record.Timestamp * 1000,
+            y: record.UsedSize
+        }));
+        let chartWrapper = div.querySelector(`#chart-wrapper-${uuid}`);
+        if (!chartWrapper) {
+            chartWrapper = document.createElement('div');
+            chartWrapper.id = `chart-wrapper-${uuid}`;
+            let placeholder = div.querySelector('div:last-child');
+            if (placeholder && placeholder.textContent.includes('history')) {
+                placeholder.replaceWith(chartWrapper);
+            } else {
+                div.appendChild(chartWrapper);
+            }
+        }
+        if (chartInstances[uuid]) {
+            chartInstances[uuid].destroy();
+            delete chartInstances[uuid];
+        }
+        chartWrapper.innerHTML = '';
+        let canvas = document.createElement('canvas');
+        canvas.id = `chart-${uuid}`;
+        canvas.style.width = '100%';
+        canvas.style.height = '256px';
+        chartWrapper.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+        chartInstances[uuid] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    {
+                        label: 'Used Size',
+                        data: usedData,
+                        borderColor: 'rgba(255, 0, 0, 1)',
+                        backgroundColor: 'rgba(200, 0, 0, 1)',
+                        borderWidth: 2,
+                        fill: true,
+                        pointRadius: 2,
+                    },
+                    {
+                        label: 'Total Size',
+                        data: totalData,
+                        borderColor: 'rgba(0, 255, 0, 1)',
+                        backgroundColor: 'rgba(0, 200, 0, 1))',
+                        borderWidth: 2,
+                        fill: true,
+                        pointRadius: 2,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Disk Size (Bytes)'
+                        },
+                    },
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'hour',
+                            tooltipFormat: 'MMM DD, HH:mm:ss',
+                            displayFormats: {
+                                hour: 'HH:mm',
+                                day: 'MMM DD'
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Time'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: sizeTooltipFormatter
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: `${diskPath} Size Trends`
+                    }
+                }
+            }
+        });
+    }
+
+    async function showDiskHistory(uuid) {
+        try {
+            const response = await fetch(`/api/stats?uuid=${uuid}&limit=30`, {
+                method: 'GET'
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const historyRecords = await response.json();
+            if (historyRecords.length === 0) {
+                console.log(`No history data available for ${uuid}.`);
+                return;
+            }
+            const diskPath = historyRecords[0].DiskPath;
+            createDiskChart(uuid, historyRecords, diskPath);
+        } catch (error) {
+            console.error("Error fetching disk records history:", error);
+            const div = document.getElementById(uuid);
+            if (div) {
+                const chartWrapper = div.querySelector(`#chart-wrapper-${uuid}`);
+                if (chartWrapper) {
+                    chartWrapper.innerHTML = `Error loading history: ${error.message}`;
+                } else {
+                    let placeholder = div.querySelector('div:last-child');
+                    if (placeholder) {
+                        placeholder.textContent = `Error loading history: ${error.message}`;
+                    }
+                }
+            }
+        }
+    }
     function urlBase64ToUint8Array(base64String) {
         const padding = '='.repeat((4 - base64String.length % 4) % 4);
         const base64 = (base64String + padding)

@@ -110,7 +110,7 @@ func GetDiskRecords(uuid string, limit int) ([]DiskRecord, error) {
 	}
 
 	query := `
-	SELECT id, timestamp, disk_path, uuid, total_size_gb, used_size_gb, available_size_gb, used_percentage 
+	SELECT id, timestamp, disk_path, uuid, total_size, used_size, available_size, used_percentage 
 	FROM DiskRecords 
 	WHERE uuid = ?
 	ORDER BY timestamp DESC

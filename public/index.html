@@ -6,6 +6,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.1/dist/chartjs-adapter-moment.min.js"></script>
     <title>DiskAlert Dashboard</title>
 </head>
 
@@ -23,13 +26,12 @@
     <button id="test-notification-all">Test Notification (all)</button>
     <hr>
     <p id="last-check"></p>
-    <pre id="stats"></pre>
+    <div id="stats"></div>
     <hr>
     <p>your subscription data:</p>
     <pre id="subscription-data">null</pre>
     <hr><button id="subscriptions-btn">Subscriptions</button>
     <pre id="subscriptions"></pre>
-
     <script src="index.js"></script>
 </body>
 

@@ -8,16 +8,57 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 func statsHandler(w http.ResponseWriter, r *http.Request) {
-	APP.diskStatus.mu.RLock()
-	defer APP.diskStatus.mu.RUnlock()
+	//if uuid is given, this will send the disk history. if not, it will send the current up to date metrics of all disks.
+	var defaultHistoryLimit = 100;
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(APP.diskStatus); err != nil {
-		http.Error(w, "Failed to encode metrics", http.StatusInternalServerError)
-		log.Printf("ERROR: Failed to encode metrics to JSON: %v", err)
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
+
+	
+	query := r.URL.Query()	
+	uuid := query.Get("uuid")
+	if uuid == "" {
+		//send current metrics
+		APP.diskStatus.mu.RLock()
+		defer APP.diskStatus.mu.RUnlock()
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(APP.diskStatus); err != nil {
+			http.Error(w, "Failed to encode metrics", http.StatusInternalServerError)
+			log.Printf("ERROR: Failed to encode metrics to JSON: %v", err)
+		}
+		return
+	}
+	//send disk history of the given uuid
+	limit := defaultHistoryLimit
+	limitStr := query.Get("limit")	//currently no ui functionality changes the default limit value.
+	if limitStr != "" {
+		parsedLimit, err := strconv.Atoi(limitStr)
+		if err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		} else {
+			log.Printf("WARN: Invalid 'limit' parameter provided, using default %d. Error: %v", defaultHistoryLimit, err)
+		}
+	}
+	diskRecords, err := GetDiskRecords(uuid, limit)
+	if err != nil {
+		log.Printf("ERROR: Database query failed for UUID %s: %v", uuid, err)
+		http.Error(w, "Internal server error while fetching history", http.StatusInternalServerError)
+		return
+	}
+	jsonData, err := json.Marshal(diskRecords)
+	if err != nil {
+		log.Printf("ERROR: Failed to marshal disk records to JSON: %v", err)
+		http.Error(w, "Internal error processing data", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonData)
 }
 
 func vapidKeyHandler(w http.ResponseWriter, r *http.Request) {
