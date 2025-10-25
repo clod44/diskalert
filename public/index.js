@@ -45,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 div.id = record.uuid;
                 div.style.display = "flex";
                 div.style.gap = "20px";
+                div.style.overflow = "hidden";
                 const pre = document.createElement("pre");
                 pre.style.flexShrink = "0";
                 pre.style.width = "400px";
@@ -90,21 +91,122 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return `${tooltipItem.dataset.label}: ${formatBytes(value)}`;
     };
-    function createDiskChart(uuid, historyRecords, diskPath) {
-        const historicalRecords = historyRecords.filter(record => !record.Prediction);
-        const predictionRecords = historyRecords.filter(record => record.Prediction);
+
+    /**
+     * Creates or updates a Chart.js instance in a specified container.
+     * It handles adding or updating datasets based on their 'label'.
+     *
+     * @param {string} title The main title for the chart.
+     * @param {object} newDataset The dataset object to add or update (must contain a 'label' property).
+     * @param {string} id The ID of the HTML container element (e.g., a div) where the chart should live.
+     */
+    function createChart(title, newDataset, id) {
+        const statContainer = document.getElementById(id);
+        if (!statContainer) {
+            console.error(`statContainer element not found for ID: ${id}`);
+            return;
+        }
+        let container = document.getElementById("chart-wrapper-" + id);
+        if (!container) {
+            container = document.createElement('div');
+            container.id = "chart-wrapper-" + id;
+            statContainer.appendChild(container);
+        }
+        let canvas = container.querySelector('canvas');
+        let existingChart = canvas ? Chart.getChart(canvas) : null;
+
+        // --- CHART CREATION LOGIC ---
+        if (!existingChart) {
+            if (!canvas) {
+                canvas = document.createElement('canvas');
+                canvas.id = `${id}-canvas`;
+                canvas.style.height = '256px';
+                container.appendChild(canvas);
+            }
+            const config = {
+                type: 'line',
+                data: {
+                    datasets: [newDataset]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Disk Size (Bytes)'
+                            },
+                        },
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'hour',
+                                tooltipFormat: 'MMM DD, HH:mm:ss',
+                                displayFormats: {
+                                    hour: 'HH:mm',
+                                    day: 'MMM DD'
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: sizeTooltipFormatter
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: title
+                        }
+                    }
+                }
+            };
+            new Chart(canvas, config);
+            return;
+        }
+
+        // --- CHART UPDATE LOGIC ---
+        let found = false;
+        const datasets = existingChart.data.datasets;
+        for (let i = 0; i < datasets.length; i++) {
+            if (datasets[i].label === newDataset.label) {
+                datasets[i] = newDataset;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            existingChart.data.datasets.push(newDataset);
+        }
+        if (title) existingChart.options.plugins.title.text = title;
+        existingChart.update();
+    }
+    function _createDiskChart(uuid, historyRecords, diskPath) {
+        const historicalRecords = historyRecords.filter(record => !record.Forecast);
+        const forecastRecords = historyRecords.filter(record => record.Forecast);
         const usedHistoricalData = historicalRecords.map(record => ({
             x: record.Timestamp * 1000,
             y: record.UsedSize
         }));
-        let usedPredictionData = [];
+        let usedForecastData = [];
         if (historicalRecords.length > 0) {
-            //so the prediction graph line and the actual graph line connects
+            //so the forecast graph line and the actual graph line connects
             const newestHistoryPoint = usedHistoricalData[0];
-            usedPredictionData.push(newestHistoryPoint);
+            usedForecastData.push(newestHistoryPoint);
 
-            predictionRecords.forEach(record => {
-                usedPredictionData.push({
+            forecastRecords.forEach(record => {
+                usedForecastData.push({
                     x: record.Timestamp * 1000,
                     y: record.UsedSize
                 });
@@ -154,7 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     },
                     {
                         label: 'Used Size (Forecast)',
-                        data: usedPredictionData,
+                        data: usedForecastData,
                         borderColor: 'rgba(255, 165, 0, 1)',
                         backgroundColor: 'transparent',
                         borderWidth: 2,
@@ -220,7 +322,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     async function showDiskHistory(uuid) {
         try {
-            const response = await fetch(`/api/stats?uuid=${uuid}&limit=30`, {
+            const response = await fetch(`/api/history?uuid=${uuid}&limit=30`, {
                 method: 'GET'
             });
             if (!response.ok) {
@@ -238,8 +340,80 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 return;
             }
+            console.log(historyRecords)
             const diskPath = historyRecords[0].DiskPath;
-            createDiskChart(uuid, historyRecords, diskPath);
+            const historyData = historyRecords.map(record => ({
+                x: record.Timestamp * 1000,
+                y: record.UsedSize
+            }));
+            const totalData = historyRecords.map(record => ({
+                x: record.Timestamp * 1000,
+                y: record.TotalSize
+            }));
+            createChart(diskPath, {
+                label: 'Used Size (Actual)',
+                data: historyData,
+                borderColor: 'rgba(255, 0, 0, 1)',
+                backgroundColor: 'rgba(200, 0, 0, 0.2)',
+                borderWidth: 2,
+                fill: false,
+                pointRadius: 2,
+            }, uuid);
+            createChart(diskPath, {
+                label: 'Total Size',
+                data: totalData,
+                borderColor: 'rgba(30, 255, 0, 1)',
+                backgroundColor: 'rgba(23, 200, 0, 0.2)',
+                borderWidth: 2,
+                fill: false,
+                pointRadius: 2,
+            }, uuid);
+            showDiskForecast(uuid);
+        } catch (error) {
+            console.error("Error fetching disk records history:", error);
+            const div = document.getElementById(uuid);
+            if (div) {
+                const chartWrapper = div.querySelector(`#chart-wrapper-${uuid}`);
+                if (chartWrapper) {
+                    chartWrapper.innerHTML = `Error loading history: ${error.message}`;
+                } else {
+                    let placeholder = div.querySelector('div:last-child');
+                    if (placeholder) {
+                        placeholder.textContent = `Error loading history: ${error.message}`;
+                    }
+                }
+            }
+        }
+    }
+    async function showDiskForecast(uuid) {
+        try {
+            const response = await fetch(`/api/forecast?uuid=${uuid}&limit=30`, {
+                method: 'GET'
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const forecasts = await response.json();
+            if (!forecasts || forecasts.length === 0) {
+                console.log(`No forecasts data available for ${uuid}.`);
+                return;
+            }
+            console.log(forecasts)
+            forecasts.forecasts.forEach((forecast, index, arr) => {
+                const data = forecast.data.map(record => ({
+                    x: record.Timestamp * 1000,
+                    y: record.UsedSize
+                }));
+                createChart(null, {
+                    label: forecast.algorithmName,
+                    data: data,
+                    borderColor: 'rgba(0, 89, 255, 1)',
+                    backgroundColor: 'rgba(0, 140, 255, 0.2)',
+                    borderWidth: 2,
+                    fill: false,
+                    pointRadius: 2,
+                }, uuid);
+            })
         } catch (error) {
             console.error("Error fetching disk records history:", error);
             const div = document.getElementById(uuid);

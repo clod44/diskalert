@@ -1,23 +1,62 @@
 package main
 
 import (
+	"fmt"
 	"math"
+	"time"
 )
+var availableForecasters = map[string]ForecastAlgorithm{
+	"crude-linear-extrapolation": CrudeLinearExtrapolation,
+}
 
 
-type PredictionAlgorithm func([]DiskRecord, int, int64) []DiskRecord
-func GeneratePredictions(history []DiskRecord, futurePoints int, intervalSeconds int64) []DiskRecord {
-    var predictor PredictionAlgorithm
-    if len(history) < 2 {
-        predictor = nil
-    } else {
-        predictor = CrudeLinearExtrapolation
+type Forecast struct {
+    AlgorithmName string       `json:"algorithmName"`
+    Data          []DiskRecord `json:"data"` 
+    Error         string       `json:"error,omitempty"` 
+}
+
+type Forecasts struct {
+    UUID      string             `json:"uuid"`
+    Timestamp int64              `json:"timestamp"`
+    Forecasts []Forecast         `json:"forecasts"` 
+}
+
+//returns an array of results of different forecast algorithms of the given uuid disk.
+func GetDiskForecasts(uuid string, limit int) (Forecasts, error) {
+    history, err := GetDiskRecords(uuid, limit)
+	forecasts := Forecasts{
+        UUID:      uuid,
+        Timestamp: time.Now().Unix(),
+        Forecasts: []Forecast{},
     }
-    var newPredictions []DiskRecord
-    if predictor != nil {
-        newPredictions = predictor(history, futurePoints, intervalSeconds)
+    if err != nil {
+        return forecasts, err
     }
-	return newPredictions
+    if len(history) < 3 {
+        return forecasts, nil
+    }
+	for _, forecaster := range availableForecasters {
+		forecastData, err := GenerateForecast(forecaster, history, limit, int64(APP.cfg.CheckIntervalSeconds))
+		if err != nil {
+			fmt.Errorf("forecast generation failed: %w", forecaster, forecastData, err)
+			continue
+		}
+		var forecast = Forecast{
+			AlgorithmName: fmt.Sprintf("%T", forecaster),
+			Data:       forecastData,
+		}
+		forecasts.Forecasts = append(forecasts.Forecasts, forecast)
+	}
+    return forecasts, nil
+}
+
+type ForecastAlgorithm func([]DiskRecord, int, int64) []DiskRecord
+func GenerateForecast(forecaster ForecastAlgorithm, history []DiskRecord, futurePoints int, intervalSeconds int64) ([]DiskRecord, error) {
+	if len(history) < 2 {
+		return nil, fmt.Errorf("not enough data points (%d provided) for forecast algorithm %s; minimum required is 2", len(history), forecaster)
+	}
+	return forecaster(history, futurePoints, intervalSeconds), nil  
 }
 
 func CrudeLinearExtrapolation(history []DiskRecord, futurePoints int, intervalSeconds int64) []DiskRecord {
@@ -37,7 +76,7 @@ func CrudeLinearExtrapolation(history []DiskRecord, futurePoints int, intervalSe
     totalSize := latest.TotalSize
     diskPath := latest.DiskPath
     uuid := latest.UUID
-    var predictions []DiskRecord
+    var forecasts []DiskRecord
 
     for i := 1; i <= futurePoints; i++ {
         nextTime := latestTime + int64(i)*intervalSeconds
@@ -52,7 +91,7 @@ func CrudeLinearExtrapolation(history []DiskRecord, futurePoints int, intervalSe
         availableSize := totalSize - usedSize
         usedPercentage := (usedSize / totalSize) * 100
 
-        prediction := DiskRecord{
+        forecast := DiskRecord{
             Timestamp:      nextTime,
             DiskPath:       diskPath,
             UUID:           uuid,
@@ -60,9 +99,9 @@ func CrudeLinearExtrapolation(history []DiskRecord, futurePoints int, intervalSe
             UsedSize:       usedSize,
             AvailableSize:  availableSize,
             UsedPercentage: usedPercentage,
-            Prediction:     1,
+            Forecast:     1,
         }
-        predictions = append(predictions, prediction)
+        forecasts = append(forecasts, forecast)
     }
-    return predictions
+    return forecasts
 }

@@ -33,7 +33,7 @@ type DiskRecord struct {
 	AvailableSize    float64
 	UsedPercentage   float64
 	UUID             string
-	Prediction		 int64
+	Forecast		 int64
 }
 
 func InitDiskHistoryDB() {
@@ -67,7 +67,7 @@ func InitDiskHistoryDB() {
         used_size REAL NOT NULL,
         available_size REAL NOT NULL,
         used_percentage REAL NOT NULL,
-        prediction INTEGER DEFAULT 0, 
+        forecast INTEGER DEFAULT 0, 
         UNIQUE(timestamp, uuid)
     );`
 	if _, err := diskHistoryDB.Exec(createTableSQL); err != nil {
@@ -114,7 +114,7 @@ func GetDiskRecords(uuid string, limit int) ([]DiskRecord, error) {
 	}
 
 	query := `
-	SELECT id, timestamp, disk_path, uuid, total_size, used_size, available_size, used_percentage, prediction 
+	SELECT id, timestamp, disk_path, uuid, total_size, used_size, available_size, used_percentage, forecast 
 	FROM DiskRecords 
 	WHERE uuid = ?
 	ORDER BY timestamp DESC
@@ -129,14 +129,12 @@ func GetDiskRecords(uuid string, limit int) ([]DiskRecord, error) {
 	var records []DiskRecord
 	for rows.Next() {
 		var r DiskRecord
-		err := rows.Scan(&r.ID, &r.Timestamp, &r.DiskPath, &r.UUID, &r.TotalSize, &r.UsedSize, &r.AvailableSize, &r.UsedPercentage, &r.Prediction)
+		err := rows.Scan(&r.ID, &r.Timestamp, &r.DiskPath, &r.UUID, &r.TotalSize, &r.UsedSize, &r.AvailableSize, &r.UsedPercentage, &r.Forecast)
 		if err != nil {
 			log.Printf("WARN: Failed to scan DiskRecord row: %v", err)
 			continue
 		}
 		records = append(records, r)
 	}
-	var newPredictions = GeneratePredictions(records, 10, int64(APP.cfg.CheckIntervalSeconds))
-    var combinedRecords = append(records, newPredictions...) 
-    return combinedRecords, rows.Err()
+    return records, rows.Err()
 }
