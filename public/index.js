@@ -99,8 +99,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }));
         let usedPredictionData = [];
         if (historicalRecords.length > 0) {
-            const lastHistoryPoint = usedHistoricalData[usedHistoricalData.length - 1];
-            usedPredictionData.push(lastHistoryPoint);
+            //so the prediction graph line and the actual graph line connects
+            const newestHistoryPoint = usedHistoricalData[0];
+            usedPredictionData.push(newestHistoryPoint);
 
             predictionRecords.forEach(record => {
                 usedPredictionData.push({
@@ -148,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         borderColor: 'rgba(255, 0, 0, 1)',
                         backgroundColor: 'rgba(200, 0, 0, 0.2)',
                         borderWidth: 2,
-                        fill: 'origin',
+                        fill: false,
                         pointRadius: 2,
                     },
                     {

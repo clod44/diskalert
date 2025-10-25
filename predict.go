@@ -17,11 +17,7 @@ func GeneratePredictions(history []DiskRecord, futurePoints int, intervalSeconds
     if predictor != nil {
         newPredictions = predictor(history, futurePoints, intervalSeconds)
     }
-	if len(newPredictions) == 0 {
-        return history
-    }
-    combinedRecords := append(history, newPredictions...)
-    return combinedRecords
+	return newPredictions
 }
 
 func CrudeLinearExtrapolation(history []DiskRecord, futurePoints int, intervalSeconds int64) []DiskRecord {
