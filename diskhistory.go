@@ -108,6 +108,8 @@ func SaveDiskRecord(record NewDiskRecord) {
 	}
 }
 
+// GetDiskRecords returns a list of disk records for the given UUID, sorted by timestamp in descending order.
+// The limit parameter specifies the maximum number of records to return.
 func GetDiskRecords(uuid string, limit int) ([]DiskRecord, error) {
 	if diskHistoryDB == nil {
 		return nil, fmt.Errorf("database not initialized")

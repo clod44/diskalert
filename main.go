@@ -48,7 +48,7 @@ func main() {
 }
 
 func logMonitoredDisk(disk MonitoredDisk) {
-	log.Printf("  Disk: [%.1f%%] %s (%d bytes used / %d bytes total) (%s)", disk.UsedPercent, disk.DiskPath, disk.UsedBytes, disk.TotalBytes, disk.UUID)
+	log.Printf("  Disk: [%.1f%%] %s (%d bytes used / %d bytes total) (%s)", disk.UsedPercent, disk.DiskPath, disk.UsedSize, disk.TotalSize, disk.UUID)
 }
 
 func logMonitoredDisks(disks []MonitoredDisk) (bool) {

@@ -21,8 +21,8 @@ type DiskStatus struct {
 type MonitoredDisk struct {
 	DiskPath   string `json:"disk_path"`
 	UUID      string `json:"uuid"`
-	TotalBytes uint64 `json:"total_bytes"`
-	UsedBytes   uint64 `json:"used_bytes"`
+	TotalSize uint64 `json:"total_size"`
+	UsedSize   uint64 `json:"used_size"`
 	UsedPercent float64 `json:"used_percent"`
 	IsAlert    bool   `json:"is_alert"`
 }
@@ -135,8 +135,8 @@ func UpdateDiskStatus() {
 		currentMonitors = append(currentMonitors, MonitoredDisk{
 			DiskPath:   mountPoint,
 			UUID:      diskUUID,
-			TotalBytes: totalBytes,
-			UsedBytes:   usedBytes,
+			TotalSize: totalBytes,
+			UsedSize:   usedBytes,
 			UsedPercent: percent,
 			IsAlert:    isAlert,
 		})

@@ -77,13 +77,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatBytes(bytes) {
+        if (!Number.isFinite(bytes) || bytes < 0) {
+            return bytes;
+        }
         if (bytes === 0) return '0 B';
         const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
-
     const sizeTooltipFormatter = (tooltipItem) => {
         const value = tooltipItem.parsed.y;
         if (isNaN(value)) {
@@ -140,13 +142,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             },
                         },
                         x: {
-                            type: 'time',
-                            time: {
-                                unit: 'hour',
-                                tooltipFormat: 'MMM DD, HH:mm:ss',
-                                displayFormats: {
-                                    hour: 'HH:mm',
-                                    day: 'MMM DD'
+
+                            type: 'linear',
+                            ticks: {
+                                callback: function (value, index, ticks) {
+                                    const date = new Date(value);
+                                    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
                                 }
                             },
                             title: {
@@ -192,134 +193,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (title) existingChart.options.plugins.title.text = title;
         existingChart.update();
     }
-    function _createDiskChart(uuid, historyRecords, diskPath) {
-        const historicalRecords = historyRecords.filter(record => !record.Forecast);
-        const forecastRecords = historyRecords.filter(record => record.Forecast);
-        const usedHistoricalData = historicalRecords.map(record => ({
-            x: record.Timestamp * 1000,
-            y: record.UsedSize
-        }));
-        let usedForecastData = [];
-        if (historicalRecords.length > 0) {
-            //so the forecast graph line and the actual graph line connects
-            const newestHistoryPoint = usedHistoricalData[0];
-            usedForecastData.push(newestHistoryPoint);
-
-            forecastRecords.forEach(record => {
-                usedForecastData.push({
-                    x: record.Timestamp * 1000,
-                    y: record.UsedSize
-                });
-            });
-        }
-        const div = document.getElementById(uuid);
-        const totalData = historyRecords.map(record => ({
-            x: record.Timestamp * 1000,
-            y: record.TotalSize
-        }));
-
-        let chartWrapper = div.querySelector(`#chart-wrapper-${uuid}`);
-        if (!chartWrapper) {
-            chartWrapper = document.createElement('div');
-            chartWrapper.id = `chart-wrapper-${uuid}`;
-            let placeholder = div.querySelector('div:last-child');
-            if (placeholder && placeholder.textContent.includes('history')) {
-                placeholder.replaceWith(chartWrapper);
-            } else {
-                div.appendChild(chartWrapper);
-            }
-        }
-        if (chartInstances[uuid]) {
-            chartInstances[uuid].destroy();
-            delete chartInstances[uuid];
-        }
-        chartWrapper.innerHTML = '';
-        let canvas = document.createElement('canvas');
-        canvas.id = `chart-${uuid}`;
-        canvas.style.width = '100%';
-        canvas.style.height = '256px';
-        chartWrapper.appendChild(canvas);
-        const ctx = canvas.getContext('2d');
-
-        chartInstances[uuid] = new Chart(ctx, {
-            type: 'line',
-            data: {
-                datasets: [
-                    {
-                        label: 'Used Size (Actual)',
-                        data: usedHistoricalData,
-                        borderColor: 'rgba(255, 0, 0, 1)',
-                        backgroundColor: 'rgba(200, 0, 0, 0.2)',
-                        borderWidth: 2,
-                        fill: false,
-                        pointRadius: 2,
-                    },
-                    {
-                        label: 'Used Size (Forecast)',
-                        data: usedForecastData,
-                        borderColor: 'rgba(255, 165, 0, 1)',
-                        backgroundColor: 'transparent',
-                        borderWidth: 2,
-                        borderDash: [5, 5],
-                        fill: false,
-                        pointRadius: 1,
-                    },
-                    {
-                        label: 'Total Size',
-                        data: totalData,
-                        borderColor: 'rgba(0, 255, 0, 1)',
-                        backgroundColor: 'rgba(0, 200, 0, 0.2)',
-                        borderWidth: 2,
-                        fill: false,
-                        pointRadius: 0,
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Disk Size (Bytes)'
-                        },
-                    },
-                    x: {
-                        type: 'time',
-                        time: {
-                            unit: 'hour',
-                            tooltipFormat: 'MMM DD, HH:mm:ss',
-                            displayFormats: {
-                                hour: 'HH:mm',
-                                day: 'MMM DD'
-                            }
-                        },
-                        title: {
-                            display: true,
-                            text: 'Time'
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'bottom',
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: sizeTooltipFormatter
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: `${diskPath} Size Trends`
-                    }
-                }
-            }
-        });
-    }
     async function showDiskHistory(uuid) {
         try {
             const response = await fetch(`/api/history?uuid=${uuid}&limit=30`, {
@@ -358,6 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 borderWidth: 2,
                 fill: false,
                 pointRadius: 2,
+                hitRadius: 5,
             }, uuid);
             createChart(diskPath, {
                 label: 'Total Size',
@@ -367,6 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 borderWidth: 2,
                 fill: false,
                 pointRadius: 2,
+                hitRadius: 5,
             }, uuid);
             showDiskForecast(uuid);
         } catch (error) {
@@ -387,6 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     async function showDiskForecast(uuid) {
         try {
+            //all forecasts data comes with simple point datas {x,y} x as timestamp. y as usedsize
             const response = await fetch(`/api/forecast?uuid=${uuid}&limit=30`, {
                 method: 'GET'
             });
@@ -400,18 +276,26 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             console.log(forecasts)
             forecasts.forecasts.forEach((forecast, index, arr) => {
-                const data = forecast.data.map(record => ({
-                    x: record.Timestamp * 1000,
-                    y: record.UsedSize
-                }));
+                //for each different forecast algorithm result:
+                const dataPoints = [];
+                const pointColors = [];
+                forecast.data.forEach(point => {
+                    dataPoints.push({
+                        x: point.x * 1000,
+                        y: point.y
+                    });
+                    pointColors.push(point.color || 'rgba(0, 89, 255, 1)');
+                });
                 createChart(null, {
                     label: forecast.algorithmName,
-                    data: data,
-                    borderColor: 'rgba(0, 89, 255, 1)',
+                    borderWidth: 1,
+                    data: dataPoints,
+                    pointBackgroundColor: pointColors,
+                    borderColor: pointColors[0],
                     backgroundColor: 'rgba(0, 140, 255, 0.2)',
-                    borderWidth: 2,
                     fill: false,
-                    pointRadius: 2,
+                    hitRadius: 5,
+                    pointRadius: 2
                 }, uuid);
             })
         } catch (error) {
