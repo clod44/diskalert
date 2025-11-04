@@ -3,3 +3,9 @@ pre {
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }
+
+.border {
+  border: 1px solid gray;
+  padding: 0.2em;
+  box-shadow: rgba(0, 0, 0, 0.39) 2px 2px 5px;
+}

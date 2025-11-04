@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/public/style.css">
+    <title>DiskAlert Dashboard</title>
+</head>
+
+<!-- HomeData:
+DiskStatus
+-->
+
+<body>
+    <div class="border">
+        <button id="subscribe-btn">Subscribe</button>
+        <button id="unsubscribe-btn">Unsubscribe</button>
+        <a href="/download/cert" target="_blank" rel="noopener noreferrer">
+            <button>Download Cert</button>
+        </a>
+        <button id="test-notification-all">Test Notification (all)</button>
+        <div class="border" style="padding:0.2em; display:inline-block;">
+            <input type="text" placeholder="endpoint stored in the database" id="test-notification-endpoint">
+            <button id="test-notification">Test Notification</button>
+        </div>
+    </div>
+    <div class="border">
+        {{range .DiskStatus.Records}}
+        <div class="border" id="{{.UUID}}">
+            <pre>{{marshalJSON .}}</pre>
+            <div class="chart-wrapper">
+                <canvas id="chart-{{.UUID}}"></canvas>
+            </div>
+        </div>
+        {{end}}
+    </div>
+    <div class="border">
+        <pre>
+            all the subscriptions datas of the server here
+        </pre>
+    </div>
+    <script src="index.js"></script>
+</body>
+
+</html>

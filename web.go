@@ -11,7 +11,6 @@ import (
 	"strconv"
 )
 
-
 func forecastHandler(w http.ResponseWriter, r *http.Request) {
 	defaultLimit := 50
 	w.Header().Set("Content-Type", "application/json")
@@ -221,6 +220,20 @@ func handleCertDownload(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Served certificate file: %s to client %s", certFileName, r.RemoteAddr)
 }
 
+func homeHandler(w http.ResponseWriter, r *http.Request) {
+    data := HomeData{
+        DiskStatus: APP.diskStatus,
+    } 
+	err := tpl.Execute(w, data)
+
+    if err != nil {
+        http.Error(w, "Could not render template page", http.StatusInternalServerError)
+        fmt.Printf("Template execution error for /test: %v\n", err)
+        return
+    }
+}
+
+
 func StartWebServer() {
 	certFilePath, err := resolvePath(APP.cfg.CertFile)
 	if err != nil {
@@ -233,6 +246,7 @@ func StartWebServer() {
 		return
 	}
 	
+	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/api/stats", statsHandler)
 	http.HandleFunc("/api/history", historyHandler)
 	http.HandleFunc("/api/forecast", forecastHandler)
@@ -248,7 +262,7 @@ func StartWebServer() {
 		log.Fatalf("Failed to create sub-filesystem for 'public' (check if public folder is correctly embedded): %v", err)
 	}
 	fileServer := http.FileServer(http.FS(publicFS))
-	http.Handle("/", fileServer)
+    http.Handle("/public/", http.StripPrefix("/public/", fileServer))
 
 	bindAddress := fmt.Sprintf(":%d", APP.cfg.Port)
 
