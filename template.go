@@ -30,10 +30,10 @@ func init() {
 }
 
 
-func marshalJSON(data interface{}) (string, error) {
-	jsonBytes, err := json.MarshalIndent(data, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(jsonBytes), nil
+func marshalJSON(data interface{}) (template.JS, error) {
+    jsonBytes, err := json.MarshalIndent(data, "", "  ")
+    if err != nil {
+        return "", err
+    }
+    return template.JS(jsonBytes), nil 
 }

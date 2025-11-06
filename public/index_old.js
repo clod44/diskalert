@@ -335,7 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         try {
-            const registration = await navigator.serviceWorker.register('/sw.js');
+            const registration = await navigator.serviceWorker.register('/public/sw.js', { scope: '/' });
             console.log('Service Worker registered successfully.');
             const vapidResponse = await fetch('/api/vapid-key');
             if (!vapidResponse.ok) {
@@ -372,7 +372,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const unsubscribeBtn = document.getElementById("unsubscribe-btn");
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
         try {
-            const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+            const registration = await navigator.serviceWorker.getRegistration('/');
             if (!registration) return;
             const subscription = await registration.pushManager.getSubscription();
             if (!subscription) return;

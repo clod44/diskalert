@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 func forecastHandler(w http.ResponseWriter, r *http.Request) {
@@ -233,6 +234,19 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
     }
 }
 
+func serviceWorkerHeaderHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The request path is relative to the Handler path, so for /public/sw.js
+		// the r.URL.Path here will contain the full path.
+		if strings.HasSuffix(r.URL.Path, "sw.js") {
+			// This header is what tells the browser the script is allowed to control the root scope (/).
+			w.Header().Set("Service-Worker-Allowed", "/")
+		}
+		// Serve the actual file content using the next handler (your FileServer)
+		next.ServeHTTP(w, r)
+	})
+}
+
 
 func StartWebServer() {
 	certFilePath, err := resolvePath(APP.cfg.CertFile)
@@ -256,14 +270,16 @@ func StartWebServer() {
 	http.HandleFunc("/api/subscriptions", subscriptionsHandler)
 	http.HandleFunc("/api/test-notification", testNotificationHandler)
 	http.HandleFunc("/download/cert", handleCertDownload)
+	
 
 	publicFS, err := fs.Sub(Assets, "public")
 	if err != nil {
-		log.Fatalf("Failed to create sub-filesystem for 'public' (check if public folder is correctly embedded): %v", err)
+		log.Fatalf("Failed to create sub-filesystem for 'public': %v", err)
 	}
 	fileServer := http.FileServer(http.FS(publicFS))
-    http.Handle("/public/", http.StripPrefix("/public/", fileServer))
-
+	wrappedFileServer := serviceWorkerHeaderHandler(fileServer)
+	http.Handle("/public/", http.StripPrefix("/public/", wrappedFileServer))
+	
 	bindAddress := fmt.Sprintf(":%d", APP.cfg.Port)
 
 	log.Println("========================================================================================")

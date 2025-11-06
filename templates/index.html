@@ -5,12 +5,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/public/style.css">
-    <title>DiskAlert Dashboard</title>
-</head>
+    <title>DiskAlert Dashboard</title><!-- HomeData:
+    DiskStatus
+    -->
+    <script type="text/javascript">
+        function init() {
+            // 1. Inject the JSON string into a multi-line JavaScript string using backticks (`)
+            const HOMEDATA_JSON_STRING = `{{marshalJSON .}}`;
 
-<!-- HomeData:
-DiskStatus
--->
+            // 2. Parse the string into a valid JavaScript object
+            const HOMEDATA = JSON.parse(HOMEDATA_JSON_STRING);
+
+            console.log("Successfully loaded template data to json for easy of access", HOMEDATA);
+            window.HOMEDATA = HOMEDATA;
+        }
+        init();
+    </script>
+</head>
 
 <body>
     <div class="border">
@@ -29,14 +40,20 @@ DiskStatus
         {{range .DiskStatus.Records}}
         <div class="border" id="{{.UUID}}">
             <pre>{{marshalJSON .}}</pre>
-            <div class="chart-wrapper">
-                <canvas id="chart-{{.UUID}}"></canvas>
+            <div class="chart-wrapper-{{.UUID}}">
+                <canvas id="chart-canvas-{{.UUID}}"></canvas>
             </div>
         </div>
         {{end}}
     </div>
     <div class="border">
-        <pre>
+        <div class="border">
+            <p>my subscription data:</p>
+            <pre id="subscription-data">
+
+            </pre>
+        </div>
+        <pre id="subscriptions">
             all the subscriptions datas of the server here
         </pre>
     </div>

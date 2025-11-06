@@ -128,7 +128,7 @@ func smaExtrapolation(points []Point, futurePoints int, intervalSeconds int64)[]
 	return append(linear, smaPoints...)
 }
 func crudeLinearExtrapolation(points []Point, futurePoints int, intervalSeconds int64) []Point {
-	color := "rgba(255,255,0,1.0)"
+	color := "rgba(100,255,0,1.0)"
 	latest := points[0]
     previous := points[1]
     timeDiff := latest.X - previous.X
