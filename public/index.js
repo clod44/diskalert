@@ -171,22 +171,23 @@ const destroyAllCharts = () => {
     console.log("All previous Chart.js instances have been destroyed.");
 }
 
-const formatBytes = (bytes) => {
-    if (!Number.isFinite(bytes) || bytes < 0) {
-        return bytes;
+/**
+ * Converts a byte value into a human-readable format (B, KB, MB, GB, TB, PB).
+ * Includes robust error handling to return the original value on invalid input.
+ * * @param {number} bytes - The size in bytes.
+ * @returns {string} The formatted string (e.g., "1.2 GB") or the original value if invalid.
+ */
+const formatBytes = (value) => {
+    if (typeof value !== 'number' || !isFinite(value) || value < 0) {
+        console.warn(`formatBytes received invalid input: ${value}. Returning original value.`);
+        return String(value);
     }
+    const bytes = value;
     if (bytes === 0) return '0 B';
     const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-const sizeTooltipFormatter = (tooltipItem) => {
-    const value = tooltipItem.parsed.y;
-    if (isNaN(value)) {
-        return `${tooltipItem.dataset.label}: Data Not Available`;
-    }
-    return `${tooltipItem.dataset.label}: ${formatBytes(value)}`;
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 };
 
 /**
@@ -198,28 +199,11 @@ const sizeTooltipFormatter = (tooltipItem) => {
  * @param {string} id The ID of the HTML container element (e.g., a div) where the chart should live.
  */
 const createChart = (title, newDataset, id) => {
-    const statContainer = document.getElementById(id);
-    if (!statContainer) {
-        console.error(`statContainer element not found for ID: ${id}`);
-        return;
-    }
-    let container = document.getElementById("chart-wrapper-" + id);
-    if (!container) {
-        container = document.createElement('div');
-        container.id = "chart-wrapper-" + id;
-        statContainer.appendChild(container);
-    }
-    let canvas = container.querySelector('canvas');
-    let existingChart = canvas ? Chart.getChart(canvas) : null;
+    const $canvas = $('#chart-canvas-' + id);
+    let existingChart = $canvas.length ? Chart.getChart($canvas[0]) : null;
 
     // --- CHART CREATION LOGIC ---
     if (!existingChart) {
-        if (!canvas) {
-            canvas = document.createElement('canvas');
-            canvas.id = `chart-canvas${id}`;
-            canvas.style.height = '256px';
-            container.appendChild(canvas);
-        }
         const config = {
             type: 'line',
             data: {
@@ -227,43 +211,68 @@ const createChart = (title, newDataset, id) => {
             },
             options: {
                 interaction: {
-                    mode: 'nearest',
-                    intersect: true
+                    mode: 'index',
+                    intersect: false
                 },
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        top: 5,
+                        right: 5,
+                        left: 5,
+                        bottom: 5,
+                    }
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
-                        title: {
+                        grid: {
                             display: true,
-                            text: 'Disk Size (Bytes)'
+                            color: 'rgba(0, 0, 0, 0.05)',
+                            drawBorder: false,
                         },
+                        ticks: {
+                            padding: 8,
+                            font: { size: 10 },
+                            callback: function (value, index, ticks) {
+                                return formatBytes(value)
+                            }
+                        },
+                        title: { display: false }
                     },
                     x: {
-
                         type: 'linear',
+                        grid: {
+                            display: false,
+                            drawBorder: false,
+                        },
                         ticks: {
+                            padding: 8,
+                            font: { size: 10 },
                             callback: function (value, index, ticks) {
                                 const date = new Date(value);
                                 return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
                             }
-                        },
-                        title: {
-                            display: true,
-                            text: 'Time'
                         }
                     }
                 },
                 plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            boxWidth: 10,
+                            padding: 10,
+                            font: { size: 11 }
+                        }
+                    },
                     title: {
-                        display: true,
-                        text: title
+                        display: false
                     }
                 }
             }
         };
-        new Chart(canvas, config);
+        new Chart($canvas[0], config);
         return;
     }
 
