@@ -40,7 +40,7 @@
         {{range .DiskStatus.Records}}
         <div class="border" id="{{.UUID}}" style="display:flex;">
             <pre>{{marshalJSON .}}</pre>
-            <div class="chart-wrapper-{{.UUID}}" style="height:100%; min-height: 10rem; flex-grow: 1;">
+            <div class="chart-wrapper-{{.UUID}}" style="height:100%; min-height: 20rem; flex-grow: 1;">
                 <canvas id="chart-canvas-{{.UUID}}" style="width: 100%; height: 100%"></canvas>
             </div>
         </div>
@@ -53,9 +53,11 @@
 
             </pre>
         </div>
-        <pre id="subscriptions">
-            all the subscriptions datas of the server here
-        </pre>
+        <div class="border">
+            <p>all subscriptions stored in the database:</p>
+            <pre id="subscriptions">
+            </pre>
+        </div>
     </div>
     <!-- order matters -->
     <script src="/public/lib/jquery-3.7.1.min.js"></script>

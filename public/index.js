@@ -44,6 +44,7 @@ $(async () => {
 
     await showExistingSubscriptionDetails()
     await showDiskGraphs();
+    handleShowSubscriptions();
 });
 
 const showDiskGraphs = async () => {

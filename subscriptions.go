@@ -39,7 +39,9 @@ func InitSubscriptionDB() {
 	}
 	
 	DB = db
-
+	if _, err := DB.Exec("PRAGMA journal_mode = WAL;"); err != nil {
+        log.Fatalf("FATAL: Failed to enable WAL mode: %v", err)
+    }
 	query := `
 	CREATE TABLE IF NOT EXISTS subscriptions (
 		endpoint TEXT PRIMARY KEY,
