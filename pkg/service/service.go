@@ -1,6 +1,7 @@
-package main
+package service
 
 import (
+	"diskalert/pkg/util"
 	"fmt"
 	"log"
 	"os"
@@ -51,7 +52,7 @@ func ManageServiceFile() error {
 	if err != nil {
 		return fmt.Errorf("failed to get current user details: %w", err)
 	}
-	appDir := getAppDir() 
+	appDir := util.GetAppDir() 
 
 	content := fmt.Sprintf(serviceFileContent, 
 		currentUser.Username,

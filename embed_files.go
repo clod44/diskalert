@@ -4,5 +4,5 @@ import (
 	"embed"
 )
 
-//go:embed public/*
+//go:embed public/* templates/index.html
 var Assets embed.FS

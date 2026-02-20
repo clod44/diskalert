@@ -1,15 +1,20 @@
-package main
+package config
 
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"diskalert/pkg/util"
 	"encoding/base64"
 	"log"
 	"math/big"
 	"os"
 	"path/filepath"
 )
+
+
+var VapidPubEncoded = ""
+var VapidPrivEncoded = ""
 
 func encodeVAPIDKey(b []byte) string {
 	return base64.URLEncoding.EncodeToString(b)
@@ -33,11 +38,11 @@ func decodePrivateKey(encodedPrivKey string) (*ecdsa.PrivateKey, string) {
 }
 
 func SetupVAPIDKeys() {
-	privKeyPath, err := resolvePath(APP.cfg.VapidPrivate)
+	privKeyPath, err := util.ResolvePath(Cfg.VapidPrivate)
 	if err != nil {
 		log.Fatalf("Fatal path error for VapidPrivate: %v", err)
 	}
-	pubKeyPath, err := resolvePath(APP.cfg.VapidPublic)
+	pubKeyPath, err := util.ResolvePath(Cfg.VapidPublic)
 	if err != nil {
 		log.Fatalf("Fatal path error for VapidPublic: %v", err)
 	}
@@ -50,31 +55,23 @@ func SetupVAPIDKeys() {
 	var privKeyEncoded string
 	writeToDisk := false
 
-	if APP.vapidPrivateContent != "" {
-		log.Printf("VAPID keys found in runtime variables. Using them and overwriting disk files.")
-		privKeyEncoded = APP.vapidPrivateContent
-		writeToDisk = true
-
+	privateKeyData, err := os.ReadFile(privKeyPath)
+	if err == nil {
+		log.Printf("Found existing VAPID private key on disk. Loading it.")
+		privKeyEncoded = string(privateKeyData)
 	} else {
-		privateKeyData, err := os.ReadFile(privKeyPath)
-		if err == nil {
-			log.Printf("Found existing VAPID private key on disk. Loading it.")
-			privKeyEncoded = string(privateKeyData)
-		} else {
-			log.Printf("VAPID keys not found. Generating new keys in %s.", vapidDir)
-			
-			newPrivateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-			if err != nil {
-				log.Fatalf("Failed to generate VAPID private key: %v", err)
-			}
-			
-			privKeyEncoded = encodeVAPIDKey(newPrivateKey.D.Bytes())
-			writeToDisk = true
+		log.Printf("VAPID keys not found. Generating new keys in %s.", vapidDir)
+		
+		newPrivateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			log.Fatalf("Failed to generate VAPID private key: %v", err)
 		}
+		
+		privKeyEncoded = encodeVAPIDKey(newPrivateKey.D.Bytes())
+		writeToDisk = true
 	}
 	
-	_, pubKeyEncoded := decodePrivateKey(privKeyEncoded)
-	
+	_, pubKeyEncoded := decodePrivateKey(privKeyEncoded)	
 	if writeToDisk {
 		if err := os.WriteFile(privKeyPath, []byte(privKeyEncoded), 0600); err != nil {
 			log.Fatalf("Failed to save VAPID private key: %v", err)
@@ -85,6 +82,6 @@ func SetupVAPIDKeys() {
 		log.Printf("Successfully saved/updated VAPID keys to disk.")
 	}
 
-	APP.vapidPublic64 = pubKeyEncoded
-	APP.vapidPrivateContent = privKeyEncoded
+	VapidPubEncoded = pubKeyEncoded
+	VapidPrivEncoded = privKeyEncoded
 }

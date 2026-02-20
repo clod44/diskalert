@@ -1,4 +1,4 @@
-package main
+package diskmon
 
 import (
 	"fmt"
@@ -69,7 +69,7 @@ func GetDiskForecasts(uuid string, window int) (Forecasts, error) {
     }
 	for name, forecaster := range availableForecasters {
 		//window = 10 => futurePoints = 10
-		forecastData, err := generateForecast(forecaster, points, window, int64(APP.cfg.CheckIntervalSeconds))
+		forecastData, err := generateForecast(forecaster, points, window, int64(Cfg.CheckIntervalSeconds))
 		if err != nil {
 			fmt.Errorf("forecast generation failed: %w", name, forecastData, err)
 			continue

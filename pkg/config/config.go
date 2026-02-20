@@ -1,6 +1,7 @@
-package main
+package config
 
 import (
+	"diskalert/pkg/util"
 	"encoding/json"
 
 	"log"
@@ -10,6 +11,7 @@ import (
 
 const configFileName = "diskalert.conf"
 
+var Cfg Config = LoadConfig();
 type Config struct {
 	LogToFile            bool   `json:"log_to_file"`
 	LogFile          	 string `json:"log_file"`
@@ -40,16 +42,9 @@ func getDefaultConfig() Config {
 	}
 }
 
-func getAppDir() string {
-	executablePath, err := os.Executable()
-	if err != nil {
-		log.Fatalf("Could not determine executable path: %v", err)
-	}
-	return filepath.Dir(executablePath)
-}
 
-func loadConfig() Config {
-	appDir := getAppDir()
+func LoadConfig() Config {
+	appDir := util.GetAppDir()
 	configFilePath := filepath.Join(appDir, configFileName)
 
 	defaultCfg := getDefaultConfig()

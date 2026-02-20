@@ -1,7 +1,9 @@
-package main
+package notifydb
 
 import (
 	"database/sql"
+	"diskalert/pkg/config"
+	"diskalert/pkg/util"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -31,7 +33,7 @@ var DB *sql.DB
 
 func InitSubscriptionDB() {
 	dbFileName := "subscriptions.db"
-	dbFilePath := filepath.Join(getAppDir(), dbFileName)
+	dbFilePath := filepath.Join(util.GetAppDir(), dbFileName)
 	
 	db, err := sql.Open("sqlite", dbFilePath)
 	if err != nil {
@@ -156,8 +158,8 @@ func SendNotification(sub PushSubscription, payload NotificationPayload) {
 
 	resp, err := webpush.SendNotification(payloadBytes, wpSub, &webpush.Options{
 		Subscriber: 	 "mailto:admin@your-disk-monitor.com", 
-		VAPIDPublicKey: 	APP.vapidPublic64,
-		VAPIDPrivateKey:    APP.vapidPrivateContent,
+		VAPIDPublicKey: 	config.VapidPubEncoded,
+		VAPIDPrivateKey:    config.VapidPrivEncoded,
 		TTL: 	 			60 * 60 * 24, // 24 hours
 	})
 

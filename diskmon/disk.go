@@ -1,6 +1,8 @@
-package main
+package diskmon
 
 import (
+	"diskalert/pkg/config"
+	"diskalert/storage/diskdb"
 	"fmt"
 	"log"
 	"os"
@@ -10,15 +12,16 @@ import (
 
 	"github.com/shirou/gopsutil/v3/disk"
 )
+var MonitoringStatus Status;
 
-type DiskStatus struct {
-	mu       sync.RWMutex
-	Records   []MonitoredDisk `json:"records"`
+type Status struct {
+	Mu       sync.RWMutex
+	Disks   []DiskData `json:"records"`
 	LastCheck string       `json:"last_check"`
 	IsAlert    bool          `json:"is_alert"`
 }
 
-type MonitoredDisk struct {
+type DiskData struct {
 	DiskPath   string `json:"disk_path"`
 	UUID      string `json:"uuid"`
 	TotalSize uint64 `json:"total_size"`
@@ -73,7 +76,7 @@ func getUUIDFromSymlinks(devicePath string) (string, error) {
 }
 
 func isExcluded(path string) bool {
-	for _, excludedPath := range APP.cfg.ExcludePaths {
+	for _, excludedPath := range config.Cfg.ExcludePaths {
 		if path == excludedPath {
 			return true
 		}
@@ -110,11 +113,11 @@ func UpdateDiskStatus() {
 		percent := usage.UsedPercent
 		totalBytes := usage.Total
 		usedBytes := usage.Used
-		isAlert := int(percent) >= APP.cfg.Threshold
+		isAlert := int(percent) >= config.Cfg.Threshold
 		
 		diskUUID := findUUIDForDevice(p.Device)
 		
-		record := NewDiskRecord{
+		record := diskdb.NewDiskRecord{
 			DiskPath:      mountPoint,
 			UUID:         diskUUID,
 			TotalSize:   totalBytes,
@@ -123,13 +126,13 @@ func UpdateDiskStatus() {
 			UsedPercentage: percent,
 		}
 
-		SaveDiskRecord(record)
+		diskdb.SaveDiskRecord(record)
 
 		log.Printf("--- Disk Report: %s (UUID: %s) ---", mountPoint, diskUUID)
 		log.Printf("Total: %d bytes", totalBytes)
 		log.Printf("Used:   %d bytes (%.1f%%)", usedBytes, percent)
 		if isAlert {
-			log.Printf("!!! ALERT: Usage exceeds threshold (%d%%) !!!", APP.cfg.Threshold)
+			log.Printf("!!! ALERT: Usage exceeds threshold (%d%%) !!!", config.Cfg.Threshold)
 		}
 
 		currentMonitors = append(currentMonitors, MonitoredDisk{
@@ -142,8 +145,8 @@ func UpdateDiskStatus() {
 		})
 	}
 
-	APP.diskStatus.mu.Lock()
-	APP.diskStatus.Records = currentMonitors
-	APP.diskStatus.LastCheck = time.Now().Format("2006-01-02 15:04:05")
-	APP.diskStatus.mu.Unlock()
+	DiskStatus.Mu.Lock()
+	DiskStatus.Records = currentMonitors
+	DiskStatus.LastCheck = time.Now().Format("2006-01-02 15:04:05")
+	DiskStatus.Mu.Unlock()
 }

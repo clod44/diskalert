@@ -1,10 +1,11 @@
-package main
+package config
 
 import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"diskalert/pkg/util"
 	"encoding/pem"
 	"log"
 	"math/big"
@@ -56,11 +57,11 @@ func validateExistingCert(certPath string, expectedIP string) bool {
 }
 
 func SetupTLSFiles() {
-	certFilePath, err := resolvePath(APP.cfg.CertFile)
+	certFilePath, err := util.ResolvePath(Cfg.CertFile)
 	if err != nil {
 		log.Fatalf("Fatal path error for CertFile: %v", err)
 	}
-	keyFilePath, err := resolvePath(APP.cfg.KeyFile)
+	keyFilePath, err := util.ResolvePath(Cfg.KeyFile)
 	if err != nil {
 		log.Fatalf("Fatal path error for KeyFile: %v", err)
 	}
@@ -76,13 +77,13 @@ func SetupTLSFiles() {
 			
 			log.Printf("Found existing TLS files in %s. Using them.", certDir)
 			
-			isIPValid := validateExistingCert(certFilePath, APP.cfg.IP)
+			isIPValid := validateExistingCert(certFilePath, Cfg.IP)
 			
 			if !isIPValid {
 				log.Printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 				log.Printf("!! CRITICAL SECURITY ERROR: CERTIFICATE STALE !!")
-				log.Printf("!! The IP address configured (%s) is NOT present in the existing certificate's SAN list, OR the certificate has expired.", APP.cfg.IP)
-				log.Printf("!! WARNING: The web server will start, but connections from %s will FAIL with 'unknown certificate' errors.", APP.cfg.IP)
+				log.Printf("!! The IP address configured (%s) is NOT present in the existing certificate's SAN list, OR the certificate has expired.", Cfg.IP)
+				log.Printf("!! WARNING: The web server will start, but connections from %s will FAIL with 'unknown certificate' errors.", Cfg.IP)
 				log.Printf("!! ACTION REQUIRED: To fix this, stop the app, manually delete %s and %s, and restart.", certFilePath, keyFilePath)
 				log.Printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 			}
@@ -105,10 +106,10 @@ func SetupTLSFiles() {
 	ipList := []net.IP{net.ParseIP("127.0.0.1")}
     commonName := "diskalert.local"
 
-	if APP.cfg.IP != "" {
-		configuredIP := net.ParseIP(APP.cfg.IP)
+	if Cfg.IP != "" {
+		configuredIP := net.ParseIP(Cfg.IP)
 		if configuredIP == nil {
-			log.Fatalf("Configured IP address '%s' is invalid. Please check the config file.", APP.cfg.IP)
+			log.Fatalf("Configured IP address '%s' is invalid. Please check the config file.", Cfg.IP)
 		}
 		ipList = append(ipList, configuredIP)
 	} else {

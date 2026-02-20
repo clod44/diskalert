@@ -1,7 +1,8 @@
-package main
+package diskdb
 
 import (
 	"database/sql"
+	"diskalert/pkg/util"
 	"fmt"
 	"log"
 	"os"
@@ -41,7 +42,7 @@ func InitDiskHistoryDB() {
 		return
 	}
 	dbFileName := "history.db"
-	dbPath := filepath.Join(getAppDir(), dbFileName)
+	dbPath := filepath.Join(util.GetAppDir(), dbFileName)
 	
 	dbDir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dbDir, 0755); err != nil {

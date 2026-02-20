@@ -1,6 +1,8 @@
-package main
+package logger
 
 import (
+	"diskalert/pkg/config"
+	"diskalert/pkg/util"
 	"encoding/json"
 	"io"
 	"log"
@@ -8,16 +10,16 @@ import (
 	"path/filepath"
 )
 
-func setupLogger() *os.File {
+func SetupLogger() *os.File {
 	log.SetFlags(log.Ldate | log.Lmicroseconds)
 
-	if !APP.cfg.LogToFile {
+	if !config.Cfg.LogToFile {
 		log.SetOutput(os.Stderr)
 		log.Println("Logger initialized. Logging to console only (LogToFile disabled in config).")
 		return nil
 	}
 
-	finalLogPath, err := resolvePath(APP.cfg.LogFile)
+	finalLogPath, err := util.ResolvePath(config.Cfg.LogFile)
 	if err != nil {
 		log.Fatalf("Failed to resolve path: %v", err)
 	}

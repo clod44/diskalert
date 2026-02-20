@@ -1,6 +1,10 @@
-package main
+package http
 
 import (
+	"diskalert/diskmon"
+	"diskalert/pkg/config"
+	"diskalert/pkg/util"
+	"diskalert/storage/diskdb"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -35,7 +39,7 @@ func forecastHandler(w http.ResponseWriter, r *http.Request) {
 			log.Printf("WARN: Invalid 'limit' parameter provided, using default %d. Error: %v", defaultLimit, err)
 		}
 	}
-	diskRecords, err := GetDiskForecasts(uuid, limit)
+	diskRecords, err := diskmon.GetDiskForecasts(uuid, limit)
 	if err != nil {
 		log.Printf("ERROR: Database query failed for UUID %s: %v", uuid, err)
 		http.Error(w, "Internal server error while fetching history", http.StatusInternalServerError)
@@ -73,7 +77,7 @@ func historyHandler(w http.ResponseWriter, r *http.Request) {
 			log.Printf("WARN: Invalid 'limit' parameter provided, using default %d. Error: %v", defaultLimit, err)
 		}
 	}
-	diskRecords, err := GetDiskRecords(uuid, limit)
+	diskRecords, err := diskdb.GetDiskRecords(uuid, limit)
 	if err != nil {
 		log.Printf("ERROR: Database query failed for UUID %s: %v", uuid, err)
 		http.Error(w, "Internal server error while fetching history", http.StatusInternalServerError)
@@ -94,24 +98,24 @@ func statsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	APP.diskStatus.mu.RLock()
-	defer APP.diskStatus.mu.RUnlock()
+	diskStatus.mu.RLock()
+	defer diskStatus.mu.RUnlock()
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(APP.diskStatus); err != nil {
+	if err := json.NewEncoder(w).Encode(diskStatus); err != nil {
 		http.Error(w, "Failed to encode metrics", http.StatusInternalServerError)
 		log.Printf("ERROR: Failed to encode metrics to JSON: %v", err)
 	}
 }
 
 func vapidKeyHandler(w http.ResponseWriter, r *http.Request) {
-	if APP.vapidPublic64 == "" {
+	if vapidPublic64 == "" {
 		http.Error(w, "VAPID public key not initialized", http.StatusInternalServerError)
 		log.Println("ERROR: VAPID public key is empty.")
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(APP.vapidPublic64))
+	w.Write([]byte(vapidPublic64))
 }
 
 func subscribeHandler(w http.ResponseWriter, r *http.Request) {
@@ -203,13 +207,13 @@ func testNotificationHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleCertDownload(w http.ResponseWriter, r *http.Request) {
-	certFilePath, err := resolvePath(APP.cfg.CertFile)
+	certFilePath, err := util.ResolvePath(Cfg.CertFile)
 	if err != nil {
 		log.Printf("ERROR: Failed to resolve path for certificate file: %v", err)
 		http.Error(w, "Failed to resolve path for certificate file.", http.StatusInternalServerError)
 		return
 	}
-	certFileName := filepath.Base(APP.cfg.CertFile) 
+	certFileName := filepath.Base(config.Cfg.CertFile) 
 	if _, err := os.Stat(certFilePath); os.IsNotExist(err) {
 		log.Printf("Certificate file not found at: %s", certFilePath)
 		http.Error(w, "Certificate file not found.", http.StatusNotFound)
@@ -223,7 +227,7 @@ func handleCertDownload(w http.ResponseWriter, r *http.Request) {
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
     data := HomeData{
-        DiskStatus: APP.diskStatus,
+        DiskStatus: diskmon.DiskStatus,
     } 
 	err := tpl.Execute(w, data)
 
@@ -249,12 +253,12 @@ func serviceWorkerHeaderHandler(next http.Handler) http.Handler {
 
 
 func StartWebServer() {
-	certFilePath, err := resolvePath(APP.cfg.CertFile)
+	certFilePath, err := util.ResolvePath(config.Cfg.CertFile)
 	if err != nil {
 		log.Printf("ERROR: Failed to resolve path for certificate file: %v", err)
 		return
 	}
-	keyFilePath, err := resolvePath(APP.cfg.KeyFile)
+	keyFilePath, err := util.ResolvePath(config.Cfg.KeyFile)
 	if err != nil {
 		log.Printf("ERROR: Failed to resolve path for key file: %v", err)
 		return
@@ -280,16 +284,16 @@ func StartWebServer() {
 	wrappedFileServer := serviceWorkerHeaderHandler(fileServer)
 	http.Handle("/public/", http.StripPrefix("/public/", wrappedFileServer))
 	
-	bindAddress := fmt.Sprintf(":%d", APP.cfg.Port)
+	bindAddress := fmt.Sprintf(":%d", config.Cfg.Port)
 
 	log.Println("========================================================================================")
 	log.Printf("DiskAlert Web Dashboard is now LIVE!")
-	log.Printf("Access Dashboard at: https://<YOUR_IP>:%d/", APP.cfg.Port)
-	log.Printf("JSON Metrics API:    https://<YOUR_IP>:%d/api/metrics", APP.cfg.Port)
+	log.Printf("Access Dashboard at: https://<YOUR_IP>:%d/", config.Cfg.Port)
+	log.Printf("JSON Metrics API:    https://<YOUR_IP>:%d/api/metrics", config.Cfg.Port)
 	log.Println("========================================================================================")
 
 	listenErr := http.ListenAndServeTLS(bindAddress, certFilePath, keyFilePath, nil)
 	if listenErr != nil {
-		log.Fatalf("HTTPS Web server failed to start on port %d: %v", APP.cfg.Port, listenErr)
+		log.Fatalf("HTTPS Web server failed to start on port %d: %v", config.Cfg.Port, listenErr)
 	}
 }
